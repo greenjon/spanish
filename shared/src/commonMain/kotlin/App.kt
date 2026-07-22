@@ -20,13 +20,20 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import com.myapplication.common.data.SettingsRepository
+import com.myapplication.common.data.TagCategories
+import com.myapplication.common.data.TagCategory
+import com.myapplication.common.data.TagFilterSpec
+import com.myapplication.common.data.TagOption
 import com.myapplication.common.data.VocabCardDto
 import com.myapplication.common.data.VocabRepository
 import com.myapplication.common.ui.DrillConfig
 import com.myapplication.common.ui.DrillMode
 import com.myapplication.common.ui.DrillState
 import com.myapplication.common.ui.DrillViewModel
+import com.myapplication.common.ui.ProgressionMode
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import org.jetbrains.compose.resources.ExperimentalResourceApi
@@ -83,14 +90,54 @@ fun App(
                 } else {
                     when (currentScreen) {
                         Screen.HOME -> HomeScreen(
-                            onStartDrill = { tag, config ->
-                                drillViewModel.startSession(tag, config)
+                            vocabRepository = vocabRepository,
+                            onStartDrill = { filterSpec, config ->
+                                drillViewModel.startSession(filterSpec, config)
                                 currentScreen = Screen.DRILL
                             }
                         )
                         Screen.DRILL -> DrillScreen(drillViewModel)
                         Screen.SETTINGS -> SettingsScreen(settingsRepository)
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ProgressionToggle(
+    selectedMode: ProgressionMode,
+    onModeSelected: (ProgressionMode) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colors.primary.copy(alpha = 0.08f),
+        modifier = modifier
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(4.dp)
+        ) {
+            ProgressionMode.values().forEach { mode ->
+                val isSelected = mode == selectedMode
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = if (isSelected) MaterialTheme.colors.primary else Color.Transparent,
+                    elevation = if (isSelected) 2.dp else 0.dp,
+                    modifier = Modifier.clickable { onModeSelected(mode) }
+                ) {
+                    Text(
+                        text = when (mode) {
+                            ProgressionMode.LINEAR -> "Linear"
+                            ProgressionMode.RANDOM -> "Random"
+                        },
+                        color = if (isSelected) MaterialTheme.colors.onPrimary else MaterialTheme.colors.onSurface.copy(alpha = 0.7f),
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                        fontSize = 14.sp,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+                    )
                 }
             }
         }
@@ -155,13 +202,248 @@ fun SentenceDropdown(
 }
 
 @Composable
-fun HomeScreen(onStartDrill: (String?, DrillConfig) -> Unit) {
-    var tagFilter by remember { mutableStateOf("") }
+fun TagChip(
+    label: String,
+    isSelected: Boolean,
+    onToggle: () -> Unit
+) {
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = if (isSelected) MaterialTheme.colors.primary else MaterialTheme.colors.onSurface.copy(alpha = 0.08f),
+        elevation = if (isSelected) 2.dp else 0.dp,
+        modifier = Modifier
+            .padding(horizontal = 4.dp, vertical = 3.dp)
+            .clickable { onToggle() }
+    ) {
+        Text(
+            text = label,
+            color = if (isSelected) MaterialTheme.colors.onPrimary else MaterialTheme.colors.onSurface,
+            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+            fontSize = 13.sp,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+        )
+    }
+}
+
+@Composable
+fun CategoryAccordion(
+    title: String,
+    selectedCount: Int,
+    isExpanded: Boolean,
+    onToggleExpand: () -> Unit,
+    content: @Composable () -> Unit
+) {
+    Card(
+        elevation = 1.dp,
+        shape = RoundedCornerShape(8.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+    ) {
+        Column {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onToggleExpand() }
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(title, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                    if (selectedCount > 0) {
+                        Spacer(Modifier.width(8.dp))
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = MaterialTheme.colors.primary,
+                            modifier = Modifier.padding(start = 4.dp)
+                        ) {
+                            Text(
+                                "$selectedCount",
+                                color = MaterialTheme.colors.onPrimary,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+                }
+                Text(if (isExpanded) "▲" else "▼", fontSize = 12.sp, color = Color.Gray)
+            }
+            if (isExpanded) {
+                Divider(color = Color.LightGray.copy(alpha = 0.4f))
+                Box(modifier = Modifier.padding(12.dp)) {
+                    content()
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun FacetedTagFilterCard(
+    vocabRepository: VocabRepository,
+    filterSpec: TagFilterSpec,
+    onFilterSpecChange: (TagFilterSpec) -> Unit
+) {
+    var matchingCardCount by remember { mutableStateOf(805) }
+    var expandedCategories by remember { mutableStateOf(setOf(TagCategories.chapters.title, TagCategories.partsOfSpeech.title)) }
+
+    LaunchedEffect(filterSpec) {
+        matchingCardCount = vocabRepository.getMatchingCardCount(filterSpec)
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(0.9f),
+        elevation = 4.dp,
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = "Vocabulary Filter",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colors.primary
+                    )
+                    Text(
+                        text = if (filterSpec.isEmpty) "All categories active" else "${filterSpec.totalSelectedCount} filter(s) applied",
+                        fontSize = 12.sp,
+                        color = Color.Gray
+                    )
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = if (matchingCardCount > 0) MaterialTheme.colors.primary.copy(alpha = 0.12f) else Color(0xFFFFEBEE),
+                    elevation = 0.dp
+                ) {
+                    Text(
+                        text = "✨ $matchingCardCount Cards",
+                        color = if (matchingCardCount > 0) MaterialTheme.colors.primary else Color.Red,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            if (filterSpec.totalSelectedCount > 0) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(
+                        onClick = { onFilterSpecChange(TagFilterSpec()) },
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                    ) {
+                        Text("Clear All Filters", fontSize = 12.sp, color = MaterialTheme.colors.primary)
+                    }
+                }
+            }
+
+            // Categories
+            TagCategories.allCategories.forEach { category ->
+                val selectedSet = when (category.title) {
+                    TagCategories.chapters.title -> filterSpec.chapters
+                    TagCategories.partsOfSpeech.title -> filterSpec.partsOfSpeech
+                    TagCategories.verbTypes.title -> filterSpec.verbTypes
+                    TagCategories.topics.title -> filterSpec.topics
+                    TagCategories.grammarTags.title -> filterSpec.grammarTags
+                    else -> emptySet()
+                }
+
+                val isExpanded = expandedCategories.contains(category.title)
+
+                CategoryAccordion(
+                    title = category.title,
+                    selectedCount = selectedSet.size,
+                    isExpanded = isExpanded,
+                    onToggleExpand = {
+                        expandedCategories = if (isExpanded) {
+                            expandedCategories - category.title
+                        } else {
+                            expandedCategories + category.title
+                        }
+                    }
+                ) {
+                    val rows = category.options.chunked(3)
+                    Column {
+                        rows.forEach { rowItems ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                                horizontalArrangement = Arrangement.Start
+                            ) {
+                                rowItems.forEach { option ->
+                                    val isSelected = selectedSet.contains(option.tag)
+                                    TagChip(
+                                        label = option.label,
+                                        isSelected = isSelected,
+                                        onToggle = {
+                                            val newSet = if (isSelected) selectedSet - option.tag else selectedSet + option.tag
+                                            val updatedSpec = when (category.title) {
+                                                TagCategories.chapters.title -> filterSpec.copy(chapters = newSet)
+                                                TagCategories.partsOfSpeech.title -> filterSpec.copy(partsOfSpeech = newSet)
+                                                TagCategories.verbTypes.title -> filterSpec.copy(verbTypes = newSet)
+                                                TagCategories.topics.title -> filterSpec.copy(topics = newSet)
+                                                TagCategories.grammarTags.title -> filterSpec.copy(grammarTags = newSet)
+                                                else -> filterSpec
+                                            }
+                                            onFilterSpecChange(updatedSpec)
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (matchingCardCount == 0) {
+                Spacer(Modifier.height(8.dp))
+                Surface(
+                    color = Color(0xFFFFEBEE),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "⚠️ No vocabulary cards match all your selected filters. Try removing some filters.",
+                        color = Color.Red,
+                        fontSize = 12.sp,
+                        modifier = Modifier.padding(10.dp),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun HomeScreen(
+    vocabRepository: VocabRepository,
+    onStartDrill: (TagFilterSpec, DrillConfig) -> Unit
+) {
+    var filterSpec by remember { mutableStateOf(TagFilterSpec()) }
+    var matchingCardCount by remember { mutableStateOf(805) }
 
     var appAction by remember { mutableStateOf("writes") }
     var appLanguage by remember { mutableStateOf("English") }
     var userAction by remember { mutableStateOf("writes") }
     var userLanguage by remember { mutableStateOf("Spanish") }
+    var progressionMode by remember { mutableStateOf(ProgressionMode.RANDOM) }
+
+    LaunchedEffect(filterSpec) {
+        matchingCardCount = vocabRepository.getMatchingCardCount(filterSpec)
+    }
 
     fun updateAppLanguage(newLang: String) {
         appLanguage = newLang
@@ -173,23 +455,25 @@ fun HomeScreen(onStartDrill: (String?, DrillConfig) -> Unit) {
         appLanguage = if (newLang == "English") "Spanish" else "English"
     }
 
+    val scrollState = rememberScrollState()
+
     Column(
-        modifier = Modifier.fillMaxSize().padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+        modifier = Modifier.fillMaxSize().verticalScroll(scrollState).padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text("Ready to Drill?", fontSize = 26.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(16.dp))
-        OutlinedTextField(
-            value = tagFilter,
-            onValueChange = { tagFilter = it },
-            label = { Text("Filter by Tag (e.g. '1A', 'ch1', leave empty for all)") },
-            modifier = Modifier.fillMaxWidth(0.8f)
+
+        FacetedTagFilterCard(
+            vocabRepository = vocabRepository,
+            filterSpec = filterSpec,
+            onFilterSpecChange = { filterSpec = it }
         )
-        Spacer(Modifier.height(24.dp))
+
+        Spacer(Modifier.height(20.dp))
 
         Card(
-            modifier = Modifier.fillMaxWidth(0.85f),
+            modifier = Modifier.fillMaxWidth(0.9f),
             elevation = 4.dp,
             shape = RoundedCornerShape(12.dp)
         ) {
@@ -247,6 +531,21 @@ fun HomeScreen(onStartDrill: (String?, DrillConfig) -> Unit) {
                     Text(".", fontSize = 18.sp, fontWeight = FontWeight.Medium)
                 }
 
+                Spacer(Modifier.height(12.dp))
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center,
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                ) {
+                    Text("Order: ", fontSize = 16.sp, fontWeight = FontWeight.Medium)
+                    Spacer(Modifier.width(8.dp))
+                    ProgressionToggle(
+                        selectedMode = progressionMode,
+                        onModeSelected = { progressionMode = it }
+                    )
+                }
+
                 Spacer(Modifier.height(16.dp))
 
                 val promptDesc = if (appAction == "speaks") "AI speaks $appLanguage audio" else "AI displays $appLanguage text"
@@ -258,7 +557,7 @@ fun HomeScreen(onStartDrill: (String?, DrillConfig) -> Unit) {
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
-                        text = "💡 $promptDesc ➔ $userDesc",
+                        text = "💡 $promptDesc ➔ $userDesc (${progressionMode.name.lowercase()} order)",
                         modifier = Modifier.padding(10.dp),
                         fontSize = 13.sp,
                         color = Color.DarkGray,
@@ -275,14 +574,17 @@ fun HomeScreen(onStartDrill: (String?, DrillConfig) -> Unit) {
                     appAction = appAction,
                     appLanguage = appLanguage,
                     userAction = userAction,
-                    userLanguage = userLanguage
+                    userLanguage = userLanguage,
+                    progressionMode = progressionMode
                 )
-                onStartDrill(tagFilter.takeIf { it.isNotBlank() }, config)
+                onStartDrill(filterSpec, config)
             },
+            enabled = matchingCardCount > 0,
             modifier = Modifier.fillMaxWidth(0.5f).height(50.dp)
         ) {
             Text("Start Drilling", fontSize = 18.sp)
         }
+        Spacer(Modifier.height(24.dp))
     }
 }
 
@@ -403,7 +705,20 @@ fun ActiveDrillView(state: DrillState.Active, viewModel: DrillViewModel) {
         val promptLangName = if (config.isAppEnglish) "English" else "Spanish"
         val targetLangName = if (config.isUserSpanish) "Spanish" else "English"
 
-        Text("App $promptLangName (${config.appAction}) ➔ User $targetLangName (${config.userAction})", fontSize = 14.sp, color = Color.Gray)
+        Row(
+            modifier = Modifier.fillMaxWidth(0.9f).padding(bottom = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("App $promptLangName (${config.appAction}) ➔ User $targetLangName (${config.userAction})", fontSize = 13.sp, color = Color.Gray)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Order: ", fontSize = 13.sp, color = Color.Gray)
+                ProgressionToggle(
+                    selectedMode = state.config.progressionMode,
+                    onModeSelected = { viewModel.setProgressionMode(it) }
+                )
+            }
+        }
         Spacer(Modifier.height(16.dp))
 
         val promptText = if (config.isAppEnglish) state.card.english else state.card.spanish

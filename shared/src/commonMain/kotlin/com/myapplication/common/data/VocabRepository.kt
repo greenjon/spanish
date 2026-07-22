@@ -1,5 +1,6 @@
 package com.myapplication.common.data
 
+import com.myapplication.common.ui.ProgressionMode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.Clock
@@ -27,32 +28,70 @@ class VocabRepository(driverFactory: DatabaseDriverFactory) {
         }
     }
 
-    suspend fun getNextCard(tagFilter: String? = null): Pair<VocabCard?, ReviewState?> {
+    suspend fun getMatchingCardCount(filterSpec: TagFilterSpec = TagFilterSpec()): Int {
+        return withContext(Dispatchers.Default) {
+            db.appDatabaseQueries.getAllCards().executeAsList().count { card ->
+                filterSpec.matches(card.tags)
+            }
+        }
+    }
+
+    suspend fun getNextCard(
+        filterSpec: TagFilterSpec = TagFilterSpec(),
+        progressionMode: ProgressionMode = ProgressionMode.RANDOM
+    ): Pair<VocabCard?, ReviewState?> {
         return withContext(Dispatchers.Default) {
             val now = Clock.System.now().toEpochMilliseconds()
             
-            // 1. Try to get a due card
-            val dueCards = db.appDatabaseQueries.getDueCards(now).executeAsList()
+            // 1. Try to get a due card that matches filter
+            val dueCards = db.appDatabaseQueries.getDueCards(now).executeAsList().filter { due ->
+                filterSpec.matches(due.tags)
+            }
             if (dueCards.isNotEmpty()) {
-                val nextDue = dueCards.first()
+                val nextDue = if (progressionMode == ProgressionMode.RANDOM) dueCards.shuffled().first() else dueCards.first()
                 val card = VocabCard(nextDue.id, nextDue.spanish, nextDue.english, nextDue.tags)
                 val state = ReviewState(nextDue.id, nextDue.nextReviewDate, nextDue.interval, nextDue.easeFactor, nextDue.repetitions)
                 return@withContext Pair(card, state)
             }
 
-            // 2. If no due cards, get an unseen card
-            val unseen = if (tagFilter.isNullOrBlank()) {
-                db.appDatabaseQueries.getUnseenCards().executeAsList().firstOrNull()
-            } else {
-                db.appDatabaseQueries.getUnseenCardsByTag(tagFilter).executeAsList().firstOrNull()
+            // 2. If no due cards, get unseen cards that match filter
+            val unseenList = db.appDatabaseQueries.getUnseenCards().executeAsList().filter { unseen ->
+                filterSpec.matches(unseen.tags)
             }
 
-            if (unseen != null) {
-                return@withContext Pair(unseen, null)
+            if (unseenList.isNotEmpty()) {
+                val nextUnseen = if (progressionMode == ProgressionMode.RANDOM) unseenList.shuffled().first() else unseenList.first()
+                return@withContext Pair(nextUnseen, null)
+            }
+
+            // 3. Fallback: pick from all cards matching filter
+            val allMatchingCards = db.appDatabaseQueries.getAllCards().executeAsList().filter { card ->
+                filterSpec.matches(card.tags)
+            }
+
+            if (allMatchingCards.isNotEmpty()) {
+                val selectedCard = if (progressionMode == ProgressionMode.RANDOM) allMatchingCards.shuffled().first() else allMatchingCards.first()
+                val reviewState = db.appDatabaseQueries.getReviewState(selectedCard.id).executeAsList().firstOrNull()?.let {
+                    ReviewState(it.cardId, it.nextReviewDate, it.interval, it.easeFactor, it.repetitions)
+                }
+                return@withContext Pair(selectedCard, reviewState)
             }
 
             Pair(null, null)
         }
+    }
+
+    // Overload for backward compatibility with string tag filter
+    suspend fun getNextCard(
+        tagFilter: String?,
+        progressionMode: ProgressionMode
+    ): Pair<VocabCard?, ReviewState?> {
+        val filterSpec = if (tagFilter.isNullOrBlank()) {
+            TagFilterSpec()
+        } else {
+            TagFilterSpec(chapters = setOf(tagFilter.trim()))
+        }
+        return getNextCard(filterSpec, progressionMode)
     }
 
     suspend fun submitReview(cardId: String, grade: Int, currentState: ReviewState?) {

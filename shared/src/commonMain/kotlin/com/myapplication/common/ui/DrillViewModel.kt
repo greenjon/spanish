@@ -3,6 +3,7 @@ package com.myapplication.common.ui
 import com.myapplication.common.ai.GeminiService
 import com.myapplication.common.audio.AudioController
 import com.myapplication.common.data.ReviewState
+import com.myapplication.common.data.TagFilterSpec
 import com.myapplication.common.data.VocabCard
 import com.myapplication.common.data.VocabRepository
 import kotlinx.coroutines.CoroutineScope
@@ -11,6 +12,11 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+
+enum class ProgressionMode {
+    LINEAR,
+    RANDOM
+}
 
 enum class DrillMode {
     AI_SPEAKS_USER_TYPES,
@@ -25,7 +31,8 @@ data class DrillConfig(
     val appAction: String = "writes",
     val appLanguage: String = "English",
     val userAction: String = "writes",
-    val userLanguage: String = "Spanish"
+    val userLanguage: String = "Spanish",
+    val progressionMode: ProgressionMode = ProgressionMode.RANDOM
 ) {
     val isAppSpeaking get() = appAction.equals("speaks", ignoreCase = true)
     val isAppWriting get() = appAction.equals("writes", ignoreCase = true)
@@ -73,12 +80,27 @@ class DrillViewModel(
 
     private var currentReviewState: ReviewState? = null
     private var activeTagFilter: String? = null
+    private var activeFilterSpec: TagFilterSpec = TagFilterSpec()
     private var activeConfig: DrillConfig = DrillConfig()
 
-    fun startSession(tagFilter: String? = null, config: DrillConfig = DrillConfig()) {
-        activeTagFilter = tagFilter
+    fun setProgressionMode(mode: ProgressionMode) {
+        activeConfig = activeConfig.copy(progressionMode = mode)
+        val state = _uiState.value
+        if (state is DrillState.Active) {
+            _uiState.value = state.copy(config = activeConfig)
+        }
+    }
+
+    fun startSession(filterSpec: TagFilterSpec, config: DrillConfig = DrillConfig()) {
+        activeFilterSpec = filterSpec
+        activeTagFilter = null
         activeConfig = config
         fetchNextCard()
+    }
+
+    fun startSession(tagFilter: String?, config: DrillConfig) {
+        val spec = if (tagFilter.isNullOrBlank()) TagFilterSpec() else TagFilterSpec(chapters = setOf(tagFilter.trim()))
+        startSession(spec, config)
     }
 
     fun startSession(tagFilter: String? = null, mode: DrillMode) {
@@ -94,7 +116,7 @@ class DrillViewModel(
     private fun fetchNextCard() {
         _uiState.value = DrillState.Loading
         scope.launch {
-            val (card, reviewState) = repository.getNextCard(activeTagFilter)
+            val (card, reviewState) = repository.getNextCard(activeFilterSpec, activeConfig.progressionMode)
             if (card != null) {
                 currentReviewState = reviewState
                 _uiState.value = DrillState.Active(
