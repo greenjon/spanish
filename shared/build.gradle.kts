@@ -58,6 +58,9 @@ kotlin {
 
                 val ktorVersion = project.extra["ktor.version"] as String
                 val sqldelightVersion = project.extra["sqldelight.version"] as String
+                val coroutinesVersion = project.extra["coroutines.version"] as String
+                
+                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:$coroutinesVersion")
                 implementation("io.ktor:ktor-client-cio:$ktorVersion")
                 implementation("app.cash.sqldelight:sqlite-driver:$sqldelightVersion")
                 implementation("com.alphacephei:vosk:0.3.45")

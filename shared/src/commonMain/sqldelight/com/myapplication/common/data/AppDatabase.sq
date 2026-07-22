@@ -1,11 +1,11 @@
-CREATE TABLE VocabCard (
+CREATE TABLE IF NOT EXISTS VocabCard (
     id TEXT NOT NULL PRIMARY KEY,
     spanish TEXT NOT NULL,
     english TEXT NOT NULL,
     tags TEXT NOT NULL -- stored as comma separated values
 );
 
-CREATE TABLE ReviewState (
+CREATE TABLE IF NOT EXISTS ReviewState (
     cardId TEXT NOT NULL PRIMARY KEY,
     nextReviewDate INTEGER NOT NULL, -- Unix timestamp in milliseconds
     interval INTEGER NOT NULL, -- in days
