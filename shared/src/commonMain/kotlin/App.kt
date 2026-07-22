@@ -72,8 +72,8 @@ fun App(
                 } else {
                     when (currentScreen) {
                         Screen.HOME -> HomeScreen(
-                            onStartDrill = { tag ->
-                                drillViewModel.startSession(tag)
+                            onStartDrill = { tag, mode ->
+                                drillViewModel.startSession(tag, mode)
                                 currentScreen = Screen.DRILL
                             }
                         )
@@ -87,8 +87,9 @@ fun App(
 }
 
 @Composable
-fun HomeScreen(onStartDrill: (String?) -> Unit) {
+fun HomeScreen(onStartDrill: (String?, DrillMode) -> Unit) {
     var tagFilter by remember { mutableStateOf("") }
+    var selectedMode by remember { mutableStateOf(DrillMode.AI_WRITES_USER_WRITES) }
 
     Column(
         modifier = Modifier.fillMaxSize().padding(16.dp),
@@ -104,8 +105,26 @@ fun HomeScreen(onStartDrill: (String?) -> Unit) {
             modifier = Modifier.fillMaxWidth(0.8f)
         )
         Spacer(Modifier.height(24.dp))
+        Text("Select Drill Mode:")
+        val modes = listOf(
+            DrillMode.AI_WRITES_USER_WRITES to "AI writes in English, you type in Spanish",
+            DrillMode.AI_SPEAKS_USER_TYPES to "AI speaks in Spanish, you type in Spanish",
+            DrillMode.AI_SPEAKS_USER_SPEAKS to "AI speaks in Spanish, you speak in Spanish",
+            DrillMode.AI_WRITES_USER_SPEAKS to "AI writes in English, you speak in Spanish"
+        )
+        modes.forEach { (mode, label) ->
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth(0.8f)) {
+                RadioButton(
+                    selected = selectedMode == mode,
+                    onClick = { selectedMode = mode }
+                )
+                Text(label, modifier = Modifier.padding(start = 8.dp))
+            }
+        }
+
+        Spacer(Modifier.height(24.dp))
         Button(
-            onClick = { onStartDrill(tagFilter.takeIf { it.isNotBlank() }) },
+            onClick = { onStartDrill(tagFilter.takeIf { it.isNotBlank() }, selectedMode) },
             modifier = Modifier.fillMaxWidth(0.5f).height(50.dp)
         ) {
             Text("Start Drilling", fontSize = 18.sp)
@@ -117,6 +136,7 @@ fun HomeScreen(onStartDrill: (String?) -> Unit) {
 fun SettingsScreen(settingsRepository: SettingsRepository) {
     var apiKey by remember { mutableStateOf(settingsRepository.getApiKey() ?: "") }
     var savedMessage by remember { mutableStateOf("") }
+    val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
 
     Column(
         modifier = Modifier.fillMaxSize().padding(16.dp),
@@ -124,6 +144,13 @@ fun SettingsScreen(settingsRepository: SettingsRepository) {
     ) {
         Text("Settings", fontSize = 24.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(16.dp))
+        
+        Button(onClick = { uriHandler.openUri("https://aistudio.google.com/app/apikey") }) {
+            Text("Get Gemini API Key")
+        }
+        
+        Spacer(Modifier.height(16.dp))
+        
         OutlinedTextField(
             value = apiKey,
             onValueChange = { apiKey = it },

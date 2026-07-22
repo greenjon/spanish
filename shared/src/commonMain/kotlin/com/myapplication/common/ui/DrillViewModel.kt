@@ -46,9 +46,11 @@ class DrillViewModel(
 
     private var currentReviewState: ReviewState? = null
     private var activeTagFilter: String? = null
+    private var selectedMode: DrillMode = DrillMode.AI_WRITES_USER_WRITES
 
-    fun startSession(tagFilter: String? = null) {
+    fun startSession(tagFilter: String? = null, mode: DrillMode) {
         activeTagFilter = tagFilter
+        selectedMode = mode
         fetchNextCard()
     }
 
@@ -59,21 +61,12 @@ class DrillViewModel(
             if (card != null) {
                 currentReviewState = reviewState
                 // Cycle through basic modes randomly, or we could let the user choose
-                val modes = listOf(
-                    DrillMode.AI_WRITES_USER_WRITES,
-                    DrillMode.AI_SPEAKS_USER_TYPES,
-                    DrillMode.AI_WRITES_USER_SPEAKS
-                ) // Keeping it simple for demo
-                
-                // Randomly assign a mode for demonstration (Ideally selected by user or spaced repetition)
-                val assignedMode = DrillMode.AI_WRITES_USER_WRITES 
-
                 _uiState.value = DrillState.Active(
                     card = card,
-                    mode = assignedMode
+                    mode = selectedMode
                 )
                 
-                if (assignedMode == DrillMode.AI_SPEAKS_USER_TYPES || assignedMode == DrillMode.AI_SPEAKS_USER_SPEAKS) {
+                if (selectedMode == DrillMode.AI_SPEAKS_USER_TYPES || selectedMode == DrillMode.AI_SPEAKS_USER_SPEAKS) {
                     audioController.speak(card.spanish)
                 }
             } else {
