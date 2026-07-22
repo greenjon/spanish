@@ -61,7 +61,7 @@ class DrillViewModel(
                 // Cycle through basic modes randomly, or we could let the user choose
                 val modes = listOf(
                     DrillMode.AI_WRITES_USER_WRITES,
-                    DrillMode.AI_SPEAKS_USER_WRITES,
+                    DrillMode.AI_SPEAKS_USER_TYPES,
                     DrillMode.AI_WRITES_USER_SPEAKS
                 ) // Keeping it simple for demo
                 

@@ -42,7 +42,7 @@ class DesktopAudioController : AudioController {
                     return@launch
                 }
 
-                LibVosk.setLogLevel(LogLevel.WARNING)
+                // LibVosk.setLogLevel(LogLevel.WARNING)
 
                 val sampleRate = 16000.0f
                 val format = AudioFormat(sampleRate, 16, 1, true, false)

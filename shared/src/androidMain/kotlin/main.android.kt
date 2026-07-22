@@ -8,8 +8,6 @@ import com.myapplication.common.data.SettingsRepository
 import com.myapplication.common.data.VocabRepository
 import com.myapplication.common.ui.DrillViewModel
 
-actual fun getPlatformName(): String = "Android"
-
 @Composable fun MainView(context: Context) {
     val audioController = remember { AndroidAudioController(context) }
     val dbDriverFactory = remember { AndroidDatabaseDriverFactory(context) }

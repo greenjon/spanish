@@ -64,9 +64,9 @@ class VocabRepository(driverFactory: DatabaseDriverFactory) {
             var easeFactor = currentState?.easeFactor ?: 2.5
 
             if (grade >= 3) {
-                if (repetitions == 0) {
+                if (repetitions == 0L) {
                     interval = 1L
-                } else if (repetitions == 1) {
+                } else if (repetitions == 1L) {
                     interval = 6L
                 } else {
                     interval = (interval * easeFactor).toLong()
