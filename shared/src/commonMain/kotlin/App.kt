@@ -1,26 +1,29 @@
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.*
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.foundation.focusable
-import androidx.compose.ui.input.key.*
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.sp
 import com.myapplication.common.data.SettingsRepository
 import com.myapplication.common.data.VocabCardDto
 import com.myapplication.common.data.VocabRepository
+import com.myapplication.common.ui.DrillConfig
 import com.myapplication.common.ui.DrillMode
 import com.myapplication.common.ui.DrillState
 import com.myapplication.common.ui.DrillViewModel
@@ -48,7 +51,6 @@ fun App(
         )
     ) {
         var currentScreen by remember { mutableStateOf(Screen.HOME) }
-        val scope = rememberCoroutineScope()
         var isDbLoaded by remember { mutableStateOf(false) }
 
         LaunchedEffect(Unit) {
@@ -81,8 +83,8 @@ fun App(
                 } else {
                     when (currentScreen) {
                         Screen.HOME -> HomeScreen(
-                            onStartDrill = { tag, mode ->
-                                drillViewModel.startSession(tag, mode)
+                            onStartDrill = { tag, config ->
+                                drillViewModel.startSession(tag, config)
                                 currentScreen = Screen.DRILL
                             }
                         )
@@ -96,16 +98,87 @@ fun App(
 }
 
 @Composable
-fun HomeScreen(onStartDrill: (String?, DrillMode) -> Unit) {
+fun SentenceDropdown(
+    options: List<String>,
+    selected: String,
+    onSelect: (String) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    Box {
+        Surface(
+            modifier = Modifier
+                .padding(horizontal = 4.dp)
+                .clickable { expanded = true },
+            shape = RoundedCornerShape(8.dp),
+            color = MaterialTheme.colors.primary.copy(alpha = 0.12f),
+            elevation = 0.dp
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+            ) {
+                Text(
+                    text = selected,
+                    color = MaterialTheme.colors.primary,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp
+                )
+                Text(
+                    text = " ▼",
+                    color = MaterialTheme.colors.primary,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(start = 4.dp)
+                )
+            }
+        }
+
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            options.forEach { option ->
+                DropdownMenuItem(
+                    onClick = {
+                        onSelect(option)
+                        expanded = false
+                    }
+                ) {
+                    Text(
+                        text = option,
+                        fontWeight = if (option == selected) FontWeight.Bold else FontWeight.Normal
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun HomeScreen(onStartDrill: (String?, DrillConfig) -> Unit) {
     var tagFilter by remember { mutableStateOf("") }
-    var selectedMode by remember { mutableStateOf(DrillMode.AI_WRITES_USER_WRITES) }
+
+    var appAction by remember { mutableStateOf("writes") }
+    var appLanguage by remember { mutableStateOf("English") }
+    var userAction by remember { mutableStateOf("writes") }
+    var userLanguage by remember { mutableStateOf("Spanish") }
+
+    fun updateAppLanguage(newLang: String) {
+        appLanguage = newLang
+        userLanguage = if (newLang == "English") "Spanish" else "English"
+    }
+
+    fun updateUserLanguage(newLang: String) {
+        userLanguage = newLang
+        appLanguage = if (newLang == "English") "Spanish" else "English"
+    }
 
     Column(
         modifier = Modifier.fillMaxSize().padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Text("Ready to Drill?", fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Text("Ready to Drill?", fontSize = 26.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(16.dp))
         OutlinedTextField(
             value = tagFilter,
@@ -114,26 +187,98 @@ fun HomeScreen(onStartDrill: (String?, DrillMode) -> Unit) {
             modifier = Modifier.fillMaxWidth(0.8f)
         )
         Spacer(Modifier.height(24.dp))
-        Text("Select Drill Mode:")
-        val modes = listOf(
-            DrillMode.AI_WRITES_USER_WRITES to "AI writes in English, you type in Spanish",
-            DrillMode.AI_SPEAKS_USER_TYPES to "AI speaks in Spanish, you type in Spanish",
-            DrillMode.AI_SPEAKS_USER_SPEAKS to "AI speaks in Spanish, you speak in Spanish",
-            DrillMode.AI_WRITES_USER_SPEAKS to "AI writes in English, you speak in Spanish"
-        )
-        modes.forEach { (mode, label) ->
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth(0.8f)) {
-                RadioButton(
-                    selected = selectedMode == mode,
-                    onClick = { selectedMode = mode }
+
+        Card(
+            modifier = Modifier.fillMaxWidth(0.85f),
+            elevation = 4.dp,
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "Configure Drill Sentence",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colors.primary
                 )
-                Text(label, modifier = Modifier.padding(start = 8.dp))
+                Spacer(Modifier.height(16.dp))
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center,
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                ) {
+                    Text("App ", fontSize = 18.sp, fontWeight = FontWeight.Medium)
+                    SentenceDropdown(
+                        options = listOf("speaks", "writes"),
+                        selected = appAction,
+                        onSelect = { appAction = it }
+                    )
+                    Text(" in ", fontSize = 18.sp, fontWeight = FontWeight.Medium)
+                    SentenceDropdown(
+                        options = listOf("English", "Spanish"),
+                        selected = appLanguage,
+                        onSelect = { updateAppLanguage(it) }
+                    )
+                    Text(".", fontSize = 18.sp, fontWeight = FontWeight.Medium)
+                }
+
+                Spacer(Modifier.height(8.dp))
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center,
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                ) {
+                    Text("User ", fontSize = 18.sp, fontWeight = FontWeight.Medium)
+                    SentenceDropdown(
+                        options = listOf("speaks", "writes"),
+                        selected = userAction,
+                        onSelect = { userAction = it }
+                    )
+                    Text(" in ", fontSize = 18.sp, fontWeight = FontWeight.Medium)
+                    SentenceDropdown(
+                        options = listOf("English", "Spanish"),
+                        selected = userLanguage,
+                        onSelect = { updateUserLanguage(it) }
+                    )
+                    Text(".", fontSize = 18.sp, fontWeight = FontWeight.Medium)
+                }
+
+                Spacer(Modifier.height(16.dp))
+
+                val promptDesc = if (appAction == "speaks") "AI speaks $appLanguage audio" else "AI displays $appLanguage text"
+                val userDesc = if (userAction == "speaks") "you speak $userLanguage into mic" else "you type $userLanguage"
+
+                Surface(
+                    color = MaterialTheme.colors.primary.copy(alpha = 0.08f),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "💡 $promptDesc ➔ $userDesc",
+                        modifier = Modifier.padding(10.dp),
+                        fontSize = 13.sp,
+                        color = Color.DarkGray,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
+                }
             }
         }
 
         Spacer(Modifier.height(24.dp))
         Button(
-            onClick = { onStartDrill(tagFilter.takeIf { it.isNotBlank() }, selectedMode) },
+            onClick = {
+                val config = DrillConfig(
+                    appAction = appAction,
+                    appLanguage = appLanguage,
+                    userAction = userAction,
+                    userLanguage = userLanguage
+                )
+                onStartDrill(tagFilter.takeIf { it.isNotBlank() }, config)
+            },
             modifier = Modifier.fillMaxWidth(0.5f).height(50.dp)
         ) {
             Text("Start Drilling", fontSize = 18.sp)
@@ -254,94 +399,171 @@ fun ActiveDrillView(state: DrillState.Active, viewModel: DrillViewModel) {
             },
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text("Mode: ${state.mode.name}", fontSize = 14.sp, color = Color.Gray)
+        val config = state.config
+        val promptLangName = if (config.isAppEnglish) "English" else "Spanish"
+        val targetLangName = if (config.isUserSpanish) "Spanish" else "English"
+
+        Text("App $promptLangName (${config.appAction}) ➔ User $targetLangName (${config.userAction})", fontSize = 14.sp, color = Color.Gray)
         Spacer(Modifier.height(16.dp))
-    
-    // Display English if AI writes
-    if (state.mode == DrillMode.AI_WRITES_USER_SPEAKS || state.mode == DrillMode.AI_WRITES_USER_WRITES) {
-        Text("Translate to Spanish:", fontSize = 18.sp)
-        Text(state.card.english, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-    } else {
-        Text("Listen and provide the Spanish text:", fontSize = 18.sp)
-    }
 
-    Spacer(Modifier.height(32.dp))
+        val promptText = if (config.isAppEnglish) state.card.english else state.card.spanish
 
-    var textFieldValue by remember(state.userInput) { 
-        mutableStateOf(TextFieldValue(
-            text = state.userInput,
-            selection = TextRange(state.userInput.length)
-        )) 
-    }
-
-    if (state.mode == DrillMode.AI_WRITES_USER_WRITES || state.mode == DrillMode.AI_SPEAKS_USER_TYPES) {
-        OutlinedTextField(
-            value = textFieldValue,
-            onValueChange = { 
-                // Only update ViewModel if text actually changed (to prevent infinite loops)
-                if (it.text != state.userInput) {
-                    viewModel.onUserInputChanged(it.text)
-                }
-                // Always update local state to preserve cursor/selection
-                textFieldValue = it
-            },
-            label = { Text("Your answer (Spanish)") },
-            enabled = !state.isRevealed,
-            modifier = Modifier.fillMaxWidth(0.8f),
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-            keyboardActions = KeyboardActions(onDone = { viewModel.checkAnswer() })
-        )
-    } else {
-        // Voice modes
-        Text("You said: ${state.userInput}", fontSize = 18.sp)
-        Spacer(Modifier.height(16.dp))
-        Button(
-            onClick = { viewModel.toggleListening() },
-            colors = ButtonDefaults.buttonColors(
-                backgroundColor = if (state.isListening) Color.Red else MaterialTheme.colors.primary
-            ),
-            enabled = !state.isRevealed
-        ) {
-            Text(if (state.isListening) "Stop Listening" else "Start Speaking")
-        }
-    }
-
-    Spacer(Modifier.height(24.dp))
-
-    if (!state.isRevealed) {
-        Button(onClick = { viewModel.checkAnswer() }) {
-            Text("Check Answer")
-        }
-    } else {
-        Text(if (state.isCorrect) "¡Correcto!" else "Incorrecto", 
-            color = if (state.isCorrect) Color.Green else Color.Red,
-            fontSize = 20.sp, fontWeight = FontWeight.Bold
-        )
-        Text("Correct answer: ${state.card.spanish}", fontSize = 18.sp)
-        Spacer(Modifier.height(16.dp))
-        
-        // Gemini Actions
-        Button(onClick = { viewModel.generateContextSentence() }) {
-            Text("AI: Generate Context Sentence")
-        }
-        if (state.aiGeneratedText != null) {
+        if (config.isAppWriting) {
+            Text("Translate to $targetLangName:", fontSize = 18.sp)
+            Text(promptText, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        } else {
+            Text("Listen to $promptLangName prompt:", fontSize = 18.sp)
             Spacer(Modifier.height(8.dp))
-            Text(state.aiGeneratedText, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)
+            Button(onClick = {
+                val langCode = if (config.isAppEnglish) "en" else "es"
+                viewModel.replayAudio(promptText, langCode)
+            }) {
+                Text("🔊 Replay Audio")
+            }
+        }
+
+        Spacer(Modifier.height(32.dp))
+
+        var textFieldValue by remember(state.card.id) { 
+            mutableStateOf(TextFieldValue(
+                text = state.userInput,
+                selection = TextRange(state.userInput.length)
+            )) 
+        }
+
+        if (config.isUserWriting) {
+            OutlinedTextField(
+                value = textFieldValue,
+                onValueChange = { 
+                    if (it.text != state.userInput) {
+                        viewModel.onUserInputChanged(it.text)
+                    }
+                    textFieldValue = it
+                },
+                label = { Text("Your answer ($targetLangName)") },
+                enabled = !state.isRevealed,
+                modifier = Modifier.fillMaxWidth(0.8f),
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { viewModel.checkAnswer() })
+            )
+            if (config.isUserSpanish && !state.isRevealed) {
+                Spacer(Modifier.height(8.dp))
+                SpanishAccentRow(
+                    onInsertChar = { char ->
+                        val selection = textFieldValue.selection
+                        val text = textFieldValue.text
+                        val start = selection.min.coerceIn(0, text.length)
+                        val end = selection.max.coerceIn(0, text.length)
+                        val newText = text.substring(0, start) + char + text.substring(end)
+                        val newSelectionIndex = start + char.length
+                        val newValue = TextFieldValue(
+                            text = newText,
+                            selection = TextRange(newSelectionIndex)
+                        )
+                        textFieldValue = newValue
+                        viewModel.onUserInputChanged(newText)
+                    }
+                )
+            }
+        } else {
+            // Voice mode
+            Text("You said: ${state.userInput}", fontSize = 18.sp)
+            Spacer(Modifier.height(16.dp))
+            Button(
+                onClick = { viewModel.toggleListening() },
+                colors = ButtonDefaults.buttonColors(
+                    backgroundColor = if (state.isListening) Color.Red else MaterialTheme.colors.primary
+                ),
+                enabled = !state.isRevealed
+            ) {
+                Text(if (state.isListening) "Stop Listening" else "Start Speaking")
+            }
         }
 
         Spacer(Modifier.height(24.dp))
-        Text("Rate your memory:")
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            (1..5).forEach { grade ->
-                Button(onClick = { viewModel.submitGradeAndNext(grade) }) {
-                    Text("$grade")
+
+        if (!state.isRevealed) {
+            Button(onClick = { viewModel.checkAnswer() }) {
+                Text("Check Answer")
+            }
+        } else {
+            Text(if (state.isCorrect) "¡Correcto!" else "Incorrecto", 
+                color = if (state.isCorrect) Color.Green else Color.Red,
+                fontSize = 20.sp, fontWeight = FontWeight.Bold
+            )
+            val expectedAnswer = if (config.isUserSpanish) state.card.spanish else state.card.english
+            Text("Correct answer: $expectedAnswer", fontSize = 18.sp)
+            Spacer(Modifier.height(16.dp))
+            
+            // Gemini Actions
+            Button(onClick = { viewModel.generateContextSentence() }) {
+                Text("AI: Generate Context Sentence")
+            }
+            if (state.aiGeneratedText != null) {
+                Spacer(Modifier.height(8.dp))
+                Text(state.aiGeneratedText, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)
+            }
+
+            Spacer(Modifier.height(24.dp))
+            Text("Rate your memory:")
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                (1..5).forEach { grade ->
+                    Button(onClick = { viewModel.submitGradeAndNext(grade) }) {
+                        Text("$grade")
+                    }
                 }
             }
-        }
-        Button(onClick = { viewModel.submitGradeAndNext(0) }, colors = ButtonDefaults.buttonColors(backgroundColor = Color.Red)) {
-            Text("Blackout (0)")
+            Button(onClick = { viewModel.submitGradeAndNext(0) }, colors = ButtonDefaults.buttonColors(backgroundColor = Color.Red)) {
+                Text("Blackout (0)")
+            }
         }
     }
 }
+
+@Composable
+fun SpanishAccentRow(
+    onInsertChar: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var isShift by remember { mutableStateOf(false) }
+    val lowercaseChars = listOf("á", "é", "í", "ó", "ú", "ñ", "ü", "¿", "¡")
+    val uppercaseChars = listOf("Á", "É", "Í", "Ó", "Ú", "Ñ", "Ü", "¿", "¡")
+    val currentChars = if (isShift) uppercaseChars else lowercaseChars
+
+    Row(
+        modifier = modifier.padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        OutlinedButton(
+            onClick = { isShift = !isShift },
+            modifier = Modifier
+                .defaultMinSize(minWidth = 34.dp, minHeight = 34.dp)
+                .height(34.dp),
+            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+            colors = ButtonDefaults.outlinedButtonColors(
+                backgroundColor = if (isShift) MaterialTheme.colors.primary.copy(alpha = 0.15f) else Color.Unspecified
+            ),
+            shape = RoundedCornerShape(6.dp)
+        ) {
+            Text("⇧", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+        }
+
+        currentChars.forEach { char ->
+            OutlinedButton(
+                onClick = {
+                    onInsertChar(char)
+                    if (isShift) isShift = false
+                },
+                modifier = Modifier
+                    .defaultMinSize(minWidth = 34.dp, minHeight = 34.dp)
+                    .height(34.dp),
+                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+                shape = RoundedCornerShape(6.dp)
+            ) {
+                Text(char, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+    }
 }

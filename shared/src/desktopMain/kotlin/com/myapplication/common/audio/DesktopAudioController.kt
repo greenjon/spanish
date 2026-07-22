@@ -19,11 +19,12 @@ class DesktopAudioController : AudioController {
     private var listeningJob: Job? = null
     private var microphone: TargetDataLine? = null
 
-    override fun speak(text: String) {
+    override fun speak(text: String, lang: String) {
         scope.launch {
             try {
-                // Using espeak for Linux desktop TTS
-                val process = ProcessBuilder("espeak", "-v", "es", text).start()
+                // Using espeak for Linux desktop TTS with selected language voice
+                val voice = if (lang.equals("en", ignoreCase = true)) "en" else "es"
+                val process = ProcessBuilder("espeak", "-v", voice, text).start()
                 process.waitFor()
             } catch (e: Exception) {
                 e.printStackTrace()

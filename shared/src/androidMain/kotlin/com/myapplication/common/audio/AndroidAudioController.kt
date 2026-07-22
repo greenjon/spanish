@@ -60,8 +60,10 @@ class AndroidAudioController(private val context: Context) : AudioController, Te
         }
     }
 
-    override fun speak(text: String) {
+    override fun speak(text: String, lang: String) {
         if (isTtsReady) {
+            val locale = if (lang.equals("en", ignoreCase = true)) Locale.US else Locale("es", "ES")
+            tts?.setLanguage(locale)
             tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, null)
         }
     }

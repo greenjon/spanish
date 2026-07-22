@@ -21,11 +21,38 @@ enum class DrillMode {
     MINI_DIALOGUE
 }
 
+data class DrillConfig(
+    val appAction: String = "writes",
+    val appLanguage: String = "English",
+    val userAction: String = "writes",
+    val userLanguage: String = "Spanish"
+) {
+    val isAppSpeaking get() = appAction.equals("speaks", ignoreCase = true)
+    val isAppWriting get() = appAction.equals("writes", ignoreCase = true)
+    val isAppEnglish get() = appLanguage.equals("English", ignoreCase = true)
+    val isAppSpanish get() = appLanguage.equals("Spanish", ignoreCase = true)
+
+    val isUserSpeaking get() = userAction.equals("speaks", ignoreCase = true)
+    val isUserWriting get() = userAction.equals("writes", ignoreCase = true)
+    val isUserSpanish get() = userLanguage.equals("Spanish", ignoreCase = true)
+    val isUserEnglish get() = userLanguage.equals("English", ignoreCase = true)
+
+    fun toLegacyMode(): DrillMode {
+        return when {
+            isAppSpeaking && isUserWriting -> DrillMode.AI_SPEAKS_USER_TYPES
+            isAppSpeaking && isUserSpeaking -> DrillMode.AI_SPEAKS_USER_SPEAKS
+            isAppWriting && isUserSpeaking -> DrillMode.AI_WRITES_USER_SPEAKS
+            else -> DrillMode.AI_WRITES_USER_WRITES
+        }
+    }
+}
+
 sealed class DrillState {
     object Loading : DrillState()
     data class Active(
         val card: VocabCard,
         val mode: DrillMode,
+        val config: DrillConfig = DrillConfig(),
         val userInput: String = "",
         val aiGeneratedText: String? = null,
         val isListening: Boolean = false,
@@ -46,12 +73,22 @@ class DrillViewModel(
 
     private var currentReviewState: ReviewState? = null
     private var activeTagFilter: String? = null
-    private var selectedMode: DrillMode = DrillMode.AI_WRITES_USER_WRITES
+    private var activeConfig: DrillConfig = DrillConfig()
+
+    fun startSession(tagFilter: String? = null, config: DrillConfig = DrillConfig()) {
+        activeTagFilter = tagFilter
+        activeConfig = config
+        fetchNextCard()
+    }
 
     fun startSession(tagFilter: String? = null, mode: DrillMode) {
-        activeTagFilter = tagFilter
-        selectedMode = mode
-        fetchNextCard()
+        val config = when (mode) {
+            DrillMode.AI_SPEAKS_USER_TYPES -> DrillConfig("speaks", "Spanish", "writes", "Spanish")
+            DrillMode.AI_SPEAKS_USER_SPEAKS -> DrillConfig("speaks", "Spanish", "speaks", "Spanish")
+            DrillMode.AI_WRITES_USER_SPEAKS -> DrillConfig("writes", "English", "speaks", "Spanish")
+            else -> DrillConfig("writes", "English", "writes", "Spanish")
+        }
+        startSession(tagFilter, config)
     }
 
     private fun fetchNextCard() {
@@ -60,19 +97,25 @@ class DrillViewModel(
             val (card, reviewState) = repository.getNextCard(activeTagFilter)
             if (card != null) {
                 currentReviewState = reviewState
-                // Cycle through basic modes randomly, or we could let the user choose
                 _uiState.value = DrillState.Active(
                     card = card,
-                    mode = selectedMode
+                    mode = activeConfig.toLegacyMode(),
+                    config = activeConfig
                 )
                 
-                if (selectedMode == DrillMode.AI_SPEAKS_USER_TYPES || selectedMode == DrillMode.AI_SPEAKS_USER_SPEAKS) {
-                    audioController.speak(card.spanish)
+                if (activeConfig.isAppSpeaking) {
+                    val promptText = if (activeConfig.isAppEnglish) card.english else card.spanish
+                    val promptLang = if (activeConfig.isAppEnglish) "en" else "es"
+                    audioController.speak(promptText, promptLang)
                 }
             } else {
                 _uiState.value = DrillState.Finished
             }
         }
+    }
+
+    fun replayAudio(text: String, lang: String = "es") {
+        audioController.speak(text, lang)
     }
 
     fun onUserInputChanged(input: String) {
@@ -110,17 +153,19 @@ class DrillViewModel(
         val state = _uiState.value
         if (state is DrillState.Active && !state.isRevealed) {
             val normalizedInput = state.userInput.trim().lowercase()
-            val normalizedTarget = state.card.spanish.trim().lowercase()
+            val targetAnswer = if (state.config.isUserSpanish) state.card.spanish else state.card.english
+            val normalizedTarget = targetAnswer.trim().lowercase()
             
-            // Simple string matching, could be improved with Levenshtein distance
             val isCorrect = normalizedInput == normalizedTarget
             
             _uiState.value = state.copy(isRevealed = true, isCorrect = isCorrect)
             
             if (isCorrect) {
-                audioController.speak("¡Correcto!")
+                audioController.speak("¡Correcto!", "es")
             } else {
-                audioController.speak("La respuesta correcta es ${state.card.spanish}")
+                val feedback = if (state.config.isUserSpanish) "La respuesta correcta es $targetAnswer" else "The correct answer is $targetAnswer"
+                val feedbackLang = if (state.config.isUserSpanish) "es" else "en"
+                audioController.speak(feedback, feedbackLang)
             }
         }
     }
@@ -141,7 +186,7 @@ class DrillViewModel(
             scope.launch {
                 val sentence = geminiService.generateContextSentence(state.card.spanish)
                 _uiState.value = state.copy(aiGeneratedText = sentence)
-                audioController.speak(sentence)
+                audioController.speak(sentence, "es")
             }
         }
     }
