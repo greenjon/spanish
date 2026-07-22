@@ -1,0 +1,58 @@
+CREATE TABLE VocabCard (
+    id TEXT NOT NULL PRIMARY KEY,
+    spanish TEXT NOT NULL,
+    english TEXT NOT NULL,
+    tags TEXT NOT NULL -- stored as comma separated values
+);
+
+CREATE TABLE ReviewState (
+    cardId TEXT NOT NULL PRIMARY KEY,
+    nextReviewDate INTEGER NOT NULL, -- Unix timestamp in milliseconds
+    interval INTEGER NOT NULL, -- in days
+    easeFactor REAL NOT NULL,
+    repetitions INTEGER NOT NULL,
+    FOREIGN KEY(cardId) REFERENCES VocabCard(id) ON DELETE CASCADE
+);
+
+-- Queries for VocabCard
+insertVocabCard:
+INSERT OR REPLACE INTO VocabCard(id, spanish, english, tags)
+VALUES (?, ?, ?, ?);
+
+getAllCards:
+SELECT * FROM VocabCard;
+
+getCardById:
+SELECT * FROM VocabCard WHERE id = ?;
+
+-- Queries for ReviewState
+insertReviewState:
+INSERT OR REPLACE INTO ReviewState(cardId, nextReviewDate, interval, easeFactor, repetitions)
+VALUES (?, ?, ?, ?, ?);
+
+getReviewState:
+SELECT * FROM ReviewState WHERE cardId = ?;
+
+-- Retrieve due cards (SM-2 logic)
+getDueCards:
+SELECT v.*, r.nextReviewDate, r.interval, r.easeFactor, r.repetitions
+FROM VocabCard v
+INNER JOIN ReviewState r ON v.id = r.cardId
+WHERE r.nextReviewDate <= ?
+ORDER BY r.nextReviewDate ASC;
+
+-- Retrieve unseen cards for the queue (no review state yet)
+getUnseenCards:
+SELECT v.*
+FROM VocabCard v
+LEFT JOIN ReviewState r ON v.id = r.cardId
+WHERE r.cardId IS NULL
+ORDER BY v.id ASC;
+
+-- Retrieve unseen cards by tag (using LIKE for comma separated tags)
+getUnseenCardsByTag:
+SELECT v.*
+FROM VocabCard v
+LEFT JOIN ReviewState r ON v.id = r.cardId
+WHERE r.cardId IS NULL AND v.tags LIKE ('%' || :tag || '%')
+ORDER BY v.id ASC;
