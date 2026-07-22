@@ -7,7 +7,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.foundation.focusable
+import androidx.compose.ui.input.key.*
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.sp
 import com.myapplication.common.data.SettingsRepository
 import com.myapplication.common.data.VocabCardDto
@@ -193,8 +202,60 @@ fun DrillScreen(viewModel: DrillViewModel) {
 
 @Composable
 fun ActiveDrillView(state: DrillState.Active, viewModel: DrillViewModel) {
-    Text("Mode: ${state.mode.name}", fontSize = 14.sp, color = Color.Gray)
-    Spacer(Modifier.height(16.dp))
+    val focusRequester = remember { FocusRequester() }
+    
+    LaunchedEffect(state.isRevealed) {
+        if (state.isRevealed) {
+            focusRequester.requestFocus()
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .focusRequester(focusRequester)
+            .focusable()
+            .onKeyEvent { event ->
+                if (event.type == KeyEventType.KeyUp) {
+                    when (event.key) {
+                        Key.Enter, Key.NumPadEnter -> {
+                            if (!state.isRevealed) viewModel.checkAnswer()
+                            true
+                        }
+                        Key.Zero, Key.NumPad0 -> {
+                            if (state.isRevealed) viewModel.submitGradeAndNext(0)
+                            true
+                        }
+                        Key.One, Key.NumPad1 -> {
+                            if (state.isRevealed) viewModel.submitGradeAndNext(1)
+                            true
+                        }
+                        Key.Two, Key.NumPad2 -> {
+                            if (state.isRevealed) viewModel.submitGradeAndNext(2)
+                            true
+                        }
+                        Key.Three, Key.NumPad3 -> {
+                            if (state.isRevealed) viewModel.submitGradeAndNext(3)
+                            true
+                        }
+                        Key.Four, Key.NumPad4 -> {
+                            if (state.isRevealed) viewModel.submitGradeAndNext(4)
+                            true
+                        }
+                        Key.Five, Key.NumPad5 -> {
+                            if (state.isRevealed) viewModel.submitGradeAndNext(5)
+                            true
+                        }
+                        else -> false
+                    }
+                } else {
+                    false
+                }
+            },
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text("Mode: ${state.mode.name}", fontSize = 14.sp, color = Color.Gray)
+        Spacer(Modifier.height(16.dp))
     
     // Display English if AI writes
     if (state.mode == DrillMode.AI_WRITES_USER_SPEAKS || state.mode == DrillMode.AI_WRITES_USER_WRITES) {
@@ -206,13 +267,30 @@ fun ActiveDrillView(state: DrillState.Active, viewModel: DrillViewModel) {
 
     Spacer(Modifier.height(32.dp))
 
+    var textFieldValue by remember(state.userInput) { 
+        mutableStateOf(TextFieldValue(
+            text = state.userInput,
+            selection = TextRange(state.userInput.length)
+        )) 
+    }
+
     if (state.mode == DrillMode.AI_WRITES_USER_WRITES || state.mode == DrillMode.AI_SPEAKS_USER_TYPES) {
         OutlinedTextField(
-            value = state.userInput,
-            onValueChange = { viewModel.onUserInputChanged(it) },
+            value = textFieldValue,
+            onValueChange = { 
+                // Only update ViewModel if text actually changed (to prevent infinite loops)
+                if (it.text != state.userInput) {
+                    viewModel.onUserInputChanged(it.text)
+                }
+                // Always update local state to preserve cursor/selection
+                textFieldValue = it
+            },
             label = { Text("Your answer (Spanish)") },
             enabled = !state.isRevealed,
-            modifier = Modifier.fillMaxWidth(0.8f)
+            modifier = Modifier.fillMaxWidth(0.8f),
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = { viewModel.checkAnswer() })
         )
     } else {
         // Voice modes
@@ -265,4 +343,5 @@ fun ActiveDrillView(state: DrillState.Active, viewModel: DrillViewModel) {
             Text("Blackout (0)")
         }
     }
+}
 }
