@@ -533,6 +533,9 @@ fun HomeScreen(
         appLanguage = if (newLang == "English") "Spanish" else "English"
     }
 
+    var selectedTabIndex by remember { mutableStateOf(0) }
+    val tabs = listOf("Drill")
+
     val scrollState = rememberScrollState()
 
     Column(
@@ -553,6 +556,34 @@ fun HomeScreen(
             )
         }
 
+        // Tab Row below Vocab Filter
+        Surface(
+            elevation = 2.dp,
+            modifier = Modifier.fillMaxWidth(0.95f).padding(bottom = 4.dp),
+            shape = RoundedCornerShape(8.dp)
+        ) {
+            TabRow(
+                selectedTabIndex = selectedTabIndex,
+                backgroundColor = MaterialTheme.colors.surface,
+                contentColor = MaterialTheme.colors.primary
+            ) {
+                tabs.forEachIndexed { index, title ->
+                    Tab(
+                        selected = selectedTabIndex == index,
+                        onClick = { selectedTabIndex = index },
+                        text = {
+                            Text(
+                                text = title,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp,
+                                color = if (selectedTabIndex == index) MaterialTheme.colors.primary else Color.Gray
+                            )
+                        }
+                    )
+                }
+            }
+        }
+
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -561,124 +592,53 @@ fun HomeScreen(
                 .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text("Ready to Drill?", fontSize = 26.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(16.dp))
+            when (selectedTabIndex) {
+                0 -> {
+                    Text("Ready to Drill?", fontSize = 26.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(16.dp))
 
-            Card(
-                modifier = Modifier.fillMaxWidth(0.95f),
-                elevation = 4.dp,
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Column(
-                    modifier = Modifier.padding(20.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    FlowRow(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalGap = 4.dp,
-                        verticalGap = 8.dp
+                    Card(
+                        modifier = Modifier.fillMaxWidth(0.95f),
+                        elevation = 4.dp,
+                        shape = RoundedCornerShape(12.dp)
                     ) {
-                        Text("App ", fontSize = 18.sp, fontWeight = FontWeight.Medium)
-                        SentenceDropdown(
-                            options = listOf("speaks", "writes"),
-                            selected = appAction,
-                            onSelect = { appAction = it }
-                        )
-                        Text(" in ", fontSize = 18.sp, fontWeight = FontWeight.Medium)
-                        SentenceDropdown(
-                            options = listOf("English", "Spanish"),
-                            selected = appLanguage,
-                            onSelect = { updateAppLanguage(it) }
-                        )
-                        Text(" and ", fontSize = 18.sp, fontWeight = FontWeight.Medium)
-                        SentenceDropdown(
-                            options = listOf("speaks", "writes"),
-                            selected = userAction,
-                            onSelect = { userAction = it }
-                        )
-                        Text(" in ", fontSize = 18.sp, fontWeight = FontWeight.Medium)
-                        SentenceDropdown(
-                            options = listOf("English", "Spanish"),
-                            selected = userLanguage,
-                            onSelect = { updateUserLanguage(it) }
-                        )
-                        Text(".", fontSize = 18.sp, fontWeight = FontWeight.Medium)
-                        Spacer(Modifier.width(8.dp))
-                        Button(
-                            onClick = {
-                                val config = DrillConfig(
-                                    appAction = appAction,
-                                    appLanguage = appLanguage,
-                                    userAction = userAction,
-                                    userLanguage = userLanguage,
-                                    progressionMode = progressionMode
-                                )
-                                drillViewModel.startSession(filterSpec, config)
-                            },
-                            enabled = matchingCardCount > 0,
-                            shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier.height(36.dp)
+                        Column(
+                            modifier = Modifier.padding(20.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Text("Go", fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                        }
-                    }
-
-                    Spacer(Modifier.height(16.dp))
-
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center,
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
-                    ) {
-                        Text("Order: ", fontSize = 16.sp, fontWeight = FontWeight.Medium)
-                        Spacer(Modifier.width(8.dp))
-                        ProgressionToggle(
-                            selectedMode = progressionMode,
-                            onModeSelected = { progressionMode = it }
-                        )
-                    }
-
-                    Spacer(Modifier.height(16.dp))
-
-                    val promptDesc = if (appAction == "speaks") "AI speaks $appLanguage audio" else "AI displays $appLanguage text"
-                    val userDesc = if (userAction == "speaks") "you speak $userLanguage into mic" else "you type $userLanguage"
-
-                    Surface(
-                        color = MaterialTheme.colors.primary.copy(alpha = 0.08f),
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            text = "💡 $promptDesc ➔ $userDesc (${progressionMode.name.lowercase()} order)",
-                            modifier = Modifier.padding(10.dp),
-                            fontSize = 13.sp,
-                            color = Color.DarkGray,
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                        )
-                    }
-                }
-            }
-
-            // Inline Drill Section
-            if (drillState !is DrillState.Idle) {
-                Spacer(Modifier.height(24.dp))
-
-                Card(
-                    modifier = Modifier.fillMaxWidth(0.95f),
-                    elevation = 4.dp,
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Box(
-                        modifier = Modifier.padding(20.dp).fillMaxWidth(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        when (val s = drillState) {
-                            is DrillState.Loading -> CircularProgressIndicator()
-                            is DrillState.Finished -> {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text("🎉 You've finished all matching cards!", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                                    Spacer(Modifier.height(12.dp))
-                                    Button(onClick = {
+                            FlowRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalGap = 4.dp,
+                                verticalGap = 8.dp
+                            ) {
+                                Text("App ", fontSize = 18.sp, fontWeight = FontWeight.Medium)
+                                SentenceDropdown(
+                                    options = listOf("speaks", "writes"),
+                                    selected = appAction,
+                                    onSelect = { appAction = it }
+                                )
+                                Text(" in ", fontSize = 18.sp, fontWeight = FontWeight.Medium)
+                                SentenceDropdown(
+                                    options = listOf("English", "Spanish"),
+                                    selected = appLanguage,
+                                    onSelect = { updateAppLanguage(it) }
+                                )
+                                Text(" and ", fontSize = 18.sp, fontWeight = FontWeight.Medium)
+                                SentenceDropdown(
+                                    options = listOf("speaks", "writes"),
+                                    selected = userAction,
+                                    onSelect = { userAction = it }
+                                )
+                                Text(" in ", fontSize = 18.sp, fontWeight = FontWeight.Medium)
+                                SentenceDropdown(
+                                    options = listOf("English", "Spanish"),
+                                    selected = userLanguage,
+                                    onSelect = { updateUserLanguage(it) }
+                                )
+                                Text(".", fontSize = 18.sp, fontWeight = FontWeight.Medium)
+                                Spacer(Modifier.width(8.dp))
+                                Button(
+                                    onClick = {
                                         val config = DrillConfig(
                                             appAction = appAction,
                                             appLanguage = appLanguage,
@@ -687,15 +647,90 @@ fun HomeScreen(
                                             progressionMode = progressionMode
                                         )
                                         drillViewModel.startSession(filterSpec, config)
-                                    }) {
-                                        Text("Drill Again")
-                                    }
+                                    },
+                                    enabled = matchingCardCount > 0,
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier.height(36.dp)
+                                ) {
+                                    Text("Go", fontSize = 16.sp, fontWeight = FontWeight.Bold)
                                 }
                             }
-                            is DrillState.Active -> {
-                                ActiveDrillView(s, drillViewModel)
+
+                            Spacer(Modifier.height(16.dp))
+
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center,
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                            ) {
+                                Text("Order: ", fontSize = 16.sp, fontWeight = FontWeight.Medium)
+                                Spacer(Modifier.width(8.dp))
+                                ProgressionToggle(
+                                    selectedMode = progressionMode,
+                                    onModeSelected = { progressionMode = it }
+                                )
                             }
-                            is DrillState.Idle -> {}
+
+                            Spacer(Modifier.height(16.dp))
+
+                            val promptDesc = if (appAction == "speaks") "AI speaks $appLanguage audio" else "AI displays $appLanguage text"
+                            val userDesc = if (userAction == "speaks") "you speak $userLanguage into mic" else "you type $userLanguage"
+
+                            Surface(
+                                color = MaterialTheme.colors.primary.copy(alpha = 0.08f),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    text = "💡 $promptDesc ➔ $userDesc (${progressionMode.name.lowercase()} order)",
+                                    modifier = Modifier.padding(10.dp),
+                                    fontSize = 13.sp,
+                                    color = Color.DarkGray,
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                )
+                            }
+                        }
+                    }
+
+                    // Inline Drill Section
+                    if (drillState !is DrillState.Idle) {
+                        Spacer(Modifier.height(24.dp))
+
+                        Card(
+                            modifier = Modifier.fillMaxWidth(0.95f),
+                            elevation = 4.dp,
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier.padding(20.dp).fillMaxWidth(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                when (val s = drillState) {
+                                    is DrillState.Loading -> CircularProgressIndicator()
+                                    is DrillState.Finished -> {
+                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                            Text("🎉 You've finished all matching cards!", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                                            Spacer(Modifier.height(12.dp))
+                                            Button(onClick = {
+                                                val config = DrillConfig(
+                                                    appAction = appAction,
+                                                    appLanguage = appLanguage,
+                                                    userAction = userAction,
+                                                    userLanguage = userLanguage,
+                                                    progressionMode = progressionMode
+                                                )
+                                                drillViewModel.startSession(filterSpec, config)
+                                            }) {
+                                                Text("Drill Again")
+                                            }
+                                        }
+                                    }
+                                    is DrillState.Active -> {
+                                        ActiveDrillView(s, drillViewModel)
+                                    }
+                                    is DrillState.Idle -> {}
+                                }
+                            }
                         }
                     }
                 }
