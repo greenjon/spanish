@@ -76,6 +76,12 @@ To package the application for distribution on Linux:
   ```
   The `.deb` installer file will be generated in `desktopApp/build/compose/binaries/main/deb/`.
 
+- **Create an `AppImage` Package (Universal Linux)**:
+  ```bash
+  ./gradlew :desktopApp:packageAppImage
+  ```
+  The `AppImage` file will be generated in `desktopApp/build/compose/binaries/main/appimage/`.
+
 ### 3. Build the Android Application (Optional)
 
 To build the Android debug APK:

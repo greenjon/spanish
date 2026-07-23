@@ -22,9 +22,11 @@ compose.desktop {
         mainClass = "MainKt"
 
         nativeDistributions {
-            targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
-            packageName = "KotlinMultiplatformComposeDesktopApplication"
+            targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb, TargetFormat.AppImage)
+            packageName = "SpanishApp"
             packageVersion = "1.0.0"
+            description = "Spanish 1A Practice and Drilling Application"
+            vendor = "SpanishApp"
         }
     }
 }
