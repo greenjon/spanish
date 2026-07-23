@@ -36,6 +36,14 @@ class VocabRepository(driverFactory: DatabaseDriverFactory) {
         }
     }
 
+    suspend fun getMatchingCards(filterSpec: TagFilterSpec = TagFilterSpec()): List<VocabCard> {
+        return withContext(Dispatchers.Default) {
+            db.appDatabaseQueries.getAllCards().executeAsList().filter { card ->
+                filterSpec.matches(card.tags)
+            }
+        }
+    }
+
     suspend fun getNextCard(
         filterSpec: TagFilterSpec = TagFilterSpec(),
         progressionMode: ProgressionMode = ProgressionMode.RANDOM

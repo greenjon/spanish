@@ -31,6 +31,7 @@ import com.myapplication.common.data.TagCategories
 import com.myapplication.common.data.TagCategory
 import com.myapplication.common.data.TagFilterSpec
 import com.myapplication.common.data.TagOption
+import com.myapplication.common.data.VocabCard
 import com.myapplication.common.data.VocabCardDto
 import com.myapplication.common.data.VocabRepository
 import com.myapplication.common.ui.DrillConfig
@@ -534,7 +535,9 @@ fun HomeScreen(
     }
 
     var selectedTabIndex by remember { mutableStateOf(0) }
-    val tabs = listOf("Drill")
+    val tabs = listOf("Drill", "Vocab")
+    var vocabSearchQuery by remember { mutableStateOf("") }
+    var autoExpandedCardId by remember { mutableStateOf<String?>(null) }
 
     val scrollState = rememberScrollState()
 
@@ -726,13 +729,36 @@ fun HomeScreen(
                                         }
                                     }
                                     is DrillState.Active -> {
-                                        ActiveDrillView(s, drillViewModel)
+                                        ActiveDrillView(
+                                            state = s,
+                                            viewModel = drillViewModel,
+                                            onInspectInVocab = { card ->
+                                                val parts = card.id.split("_")
+                                                val rootSearch = if (parts.size >= 2 && parts[0] == "conj") {
+                                                    parts[1]
+                                                } else {
+                                                    card.spanish
+                                                }
+                                                vocabSearchQuery = rootSearch
+                                                autoExpandedCardId = card.id
+                                                selectedTabIndex = 1
+                                            }
+                                        )
                                     }
                                     is DrillState.Idle -> {}
                                 }
                             }
                         }
                     }
+                }
+                1 -> {
+                    VocabTabView(
+                        vocabRepository = vocabRepository,
+                        filterSpec = filterSpec,
+                        searchQuery = vocabSearchQuery,
+                        onSearchQueryChange = { vocabSearchQuery = it },
+                        autoExpandedCardId = autoExpandedCardId
+                    )
                 }
             }
 
@@ -802,7 +828,11 @@ fun DrillScreen(viewModel: DrillViewModel) {
 }
 
 @Composable
-fun ActiveDrillView(state: DrillState.Active, viewModel: DrillViewModel) {
+fun ActiveDrillView(
+    state: DrillState.Active,
+    viewModel: DrillViewModel,
+    onInspectInVocab: ((VocabCard) -> Unit)? = null
+) {
     val focusRequester = remember { FocusRequester() }
     val inputFocusRequester = remember { FocusRequester() }
     
@@ -954,7 +984,18 @@ fun ActiveDrillView(state: DrillState.Active, viewModel: DrillViewModel) {
             }
         }
 
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(16.dp))
+
+        if (onInspectInVocab != null) {
+            OutlinedButton(
+                onClick = { onInspectInVocab(state.card) },
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Text("🔍 Inspect in Vocab", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
 
         if (!state.isRevealed) {
             Button(onClick = { viewModel.checkAnswer() }) {
@@ -989,6 +1030,321 @@ fun ActiveDrillView(state: DrillState.Active, viewModel: DrillViewModel) {
             }
             Button(onClick = { viewModel.submitGradeAndNext(0) }, colors = ButtonDefaults.buttonColors(backgroundColor = Color.Red)) {
                 Text("Blackout (0)")
+            }
+        }
+    }
+}
+
+data class VocabGroup(
+    val rootCard: VocabCard,
+    val forms: List<VocabCard>
+)
+
+fun groupVocabCards(cards: List<VocabCard>): List<VocabGroup> {
+    val verbFormsMap = mutableMapOf<String, MutableList<VocabCard>>()
+    val rootCards = mutableListOf<VocabCard>()
+
+    for (card in cards) {
+        val isVerbForm = card.tags.contains("verb-form") || card.id.startsWith("conj_")
+        if (isVerbForm) {
+            val parts = card.id.split("_")
+            val rootKey = if (parts.size >= 2 && parts[0] == "conj") parts[1] else card.spanish.trim()
+            verbFormsMap.getOrPut(rootKey) { mutableListOf() }.add(card)
+        } else {
+            rootCards.add(card)
+        }
+    }
+
+    val groups = mutableListOf<VocabGroup>()
+    val processedFormRoots = mutableSetOf<String>()
+
+    for (root in rootCards) {
+        val rootKey = root.spanish.trim()
+        val forms = verbFormsMap[rootKey] ?: emptyList()
+        if (forms.isNotEmpty()) {
+            processedFormRoots.add(rootKey)
+        }
+        groups.add(VocabGroup(rootCard = root, forms = forms))
+    }
+
+    for ((rootKey, forms) in verbFormsMap) {
+        if (!processedFormRoots.contains(rootKey)) {
+            val dummyRoot = VocabCard(
+                id = "group_$rootKey",
+                spanish = rootKey,
+                english = forms.firstOrNull()?.english ?: "",
+                tags = "verb,infinitive"
+            )
+            groups.add(VocabGroup(rootCard = dummyRoot, forms = forms))
+        }
+    }
+
+    return groups
+}
+
+@Composable
+fun VocabTabView(
+    vocabRepository: VocabRepository,
+    filterSpec: TagFilterSpec,
+    searchQuery: String,
+    onSearchQueryChange: (String) -> Unit,
+    autoExpandedCardId: String?
+) {
+    var cards by remember { mutableStateOf<List<VocabCard>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
+    var expandAll by remember { mutableStateOf(false) }
+
+    LaunchedEffect(filterSpec) {
+        isLoading = true
+        cards = vocabRepository.getMatchingCards(filterSpec)
+        isLoading = false
+    }
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Card(
+            modifier = Modifier.fillMaxWidth(0.95f),
+            elevation = 4.dp,
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = onSearchQueryChange,
+                    label = { Text("Search Spanish or English words...") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    trailingIcon = {
+                        if (searchQuery.isNotEmpty()) {
+                            IconButton(onClick = { onSearchQueryChange("") }) {
+                                Text("✕", fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                )
+
+                Spacer(Modifier.height(12.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val grouped = groupVocabCards(cards)
+                    val filteredGroups = if (searchQuery.isBlank()) {
+                        grouped
+                    } else {
+                        grouped.filter { group ->
+                            group.rootCard.spanish.contains(searchQuery, ignoreCase = true) ||
+                            group.rootCard.english.contains(searchQuery, ignoreCase = true) ||
+                            group.forms.any {
+                                it.spanish.contains(searchQuery, ignoreCase = true) ||
+                                it.english.contains(searchQuery, ignoreCase = true)
+                            }
+                        }
+                    }
+
+                    Text(
+                        text = "Showing ${filteredGroups.size} word group(s)",
+                        fontSize = 13.sp,
+                        color = Color.Gray
+                    )
+
+                    TextButton(
+                        onClick = { expandAll = !expandAll }
+                    ) {
+                        Text(if (expandAll) "Collapse All" else "Expand All", fontSize = 13.sp)
+                    }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        if (isLoading) {
+            CircularProgressIndicator(modifier = Modifier.padding(24.dp))
+        } else {
+            val grouped = groupVocabCards(cards)
+            val filteredGroups = if (searchQuery.isBlank()) {
+                grouped
+            } else {
+                grouped.filter { group ->
+                    group.rootCard.spanish.contains(searchQuery, ignoreCase = true) ||
+                    group.rootCard.english.contains(searchQuery, ignoreCase = true) ||
+                    group.forms.any {
+                        it.spanish.contains(searchQuery, ignoreCase = true) ||
+                        it.english.contains(searchQuery, ignoreCase = true)
+                    }
+                }
+            }
+
+            if (filteredGroups.isEmpty()) {
+                Surface(
+                    color = MaterialTheme.colors.primary.copy(alpha = 0.08f),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.fillMaxWidth(0.95f)
+                ) {
+                    Text(
+                        text = "No vocabulary words match your search and filter criteria.",
+                        modifier = Modifier.padding(16.dp),
+                        color = Color.Gray,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
+                }
+            } else {
+                filteredGroups.forEach { group ->
+                    VocabGroupCard(
+                        group = group,
+                        expandAll = expandAll,
+                        autoExpandedCardId = autoExpandedCardId,
+                        searchQuery = searchQuery
+                    )
+                    Spacer(Modifier.height(10.dp))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun VocabGroupCard(
+    group: VocabGroup,
+    expandAll: Boolean,
+    autoExpandedCardId: String?,
+    searchQuery: String
+) {
+    val isAutoMatch = autoExpandedCardId != null && (
+        group.rootCard.id == autoExpandedCardId || group.forms.any { it.id == autoExpandedCardId }
+    )
+    val isSearchMatch = searchQuery.isNotBlank() && (
+        group.rootCard.spanish.contains(searchQuery, ignoreCase = true) ||
+        group.forms.any { it.spanish.contains(searchQuery, ignoreCase = true) }
+    )
+
+    var isExpanded by remember(expandAll, isAutoMatch, isSearchMatch) {
+        mutableStateOf(expandAll || isAutoMatch || isSearchMatch)
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(0.95f),
+        elevation = 3.dp,
+        shape = RoundedCornerShape(10.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { isExpanded = !isExpanded },
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = group.rootCard.spanish,
+                            fontSize = 19.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colors.primary
+                        )
+                        if (group.forms.isNotEmpty()) {
+                            Spacer(Modifier.width(8.dp))
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = MaterialTheme.colors.primary.copy(alpha = 0.12f)
+                            ) {
+                                Text(
+                                    text = "⚡ ${group.forms.size} forms",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colors.primary,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                    }
+                    Text(
+                        text = group.rootCard.english,
+                        fontSize = 14.sp,
+                        color = Color.DarkGray
+                    )
+                }
+
+                Text(
+                    text = if (isExpanded) "▲" else "▼",
+                    fontSize = 14.sp,
+                    color = MaterialTheme.colors.primary,
+                    modifier = Modifier.padding(start = 8.dp)
+                )
+            }
+
+            if (isExpanded) {
+                Spacer(Modifier.height(12.dp))
+                Divider(color = Color.LightGray.copy(alpha = 0.4f))
+                Spacer(Modifier.height(8.dp))
+
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalGap = 4.dp,
+                    verticalGap = 4.dp
+                ) {
+                    group.rootCard.tags.split(",").forEach { tag ->
+                        val trimmed = tag.trim()
+                        if (trimmed.isNotEmpty()) {
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = Color.LightGray.copy(alpha = 0.25f)
+                            ) {
+                                Text(
+                                    text = trimmed,
+                                    fontSize = 11.sp,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                    color = Color.DarkGray
+                                )
+                            }
+                        }
+                    }
+                }
+
+                if (group.forms.isNotEmpty()) {
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        text = "Conjugations / Forms:",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.Gray
+                    )
+                    Spacer(Modifier.height(6.dp))
+
+                    group.forms.forEach { form ->
+                        Surface(
+                            color = MaterialTheme.colors.primary.copy(alpha = 0.05f),
+                            shape = RoundedCornerShape(6.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 3.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = form.spanish,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 15.sp,
+                                    color = MaterialTheme.colors.primary
+                                )
+                                Text(
+                                    text = form.english,
+                                    fontSize = 13.sp,
+                                    color = Color.DarkGray
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
     }
