@@ -11,14 +11,14 @@ import com.myapplication.common.data.VocabRepository
 import com.myapplication.common.ui.DrillViewModel
 
 @Composable fun MainView() {
-    val audioController = remember { DesktopAudioController() }
+    val settingsRepository = remember { SettingsRepository() }
+    val audioController = remember { DesktopAudioController(settingsRepository) }
     val dbDriverFactory = remember { DesktopDatabaseDriverFactory() }
     val repository = remember { VocabRepository(dbDriverFactory) }
-    val settingsRepository = remember { SettingsRepository() }
     val geminiService = remember { GeminiService(settingsRepository) }
     val drillViewModel = remember { DrillViewModel(repository, audioController, geminiService) }
 
-    App(drillViewModel, settingsRepository, repository)
+    App(drillViewModel, settingsRepository, repository, audioController)
 }
 
 @Preview

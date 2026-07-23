@@ -63,8 +63,6 @@ kotlin {
                 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:$coroutinesVersion")
                 implementation("io.ktor:ktor-client-cio:$ktorVersion")
                 implementation("app.cash.sqldelight:sqlite-driver:$sqldelightVersion")
-                implementation("com.alphacephei:vosk:0.3.45")
-                implementation("net.java.dev.jna:jna:5.13.0")
             }
         }
     }

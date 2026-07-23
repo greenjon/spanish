@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import com.myapplication.common.audio.AudioController
 import com.myapplication.common.data.SettingsRepository
 import com.myapplication.common.data.TagCategories
 import com.myapplication.common.data.TagCategory
@@ -55,7 +56,8 @@ enum class Screen {
 fun App(
     drillViewModel: DrillViewModel,
     settingsRepository: SettingsRepository,
-    vocabRepository: VocabRepository
+    vocabRepository: VocabRepository,
+    audioController: AudioController? = null
 ) {
     MaterialTheme(
         colors = lightColors(
@@ -100,7 +102,7 @@ fun App(
                             drillViewModel = drillViewModel,
                             vocabRepository = vocabRepository
                         )
-                        Screen.SETTINGS -> SettingsScreen(settingsRepository)
+                        Screen.SETTINGS -> SettingsScreen(settingsRepository, audioController)
                     }
                 }
             }
@@ -769,41 +771,168 @@ fun HomeScreen(
     }
 }
 
+private data class VoiceOption(
+    val id: String,
+    val friendlyName: String
+)
+
+private val englishVoices = listOf(
+    VoiceOption("en_US-lessac-medium", "English (US) - Female (Lessac) - Medium"),
+    VoiceOption("en_US-ryan-high", "English (US) - Male (Ryan) - High Quality"),
+    VoiceOption("en_US-bryce-medium", "English (US) - Male (Bryce) - Medium")
+)
+
+private val spanishVoices = listOf(
+    VoiceOption("es_MX-ald-medium", "Spanish (Mexico) - Male (Ald) - Medium"),
+    VoiceOption("es_MX-claude-high", "Spanish (Mexico) - Male (Claude) - High Quality"),
+    VoiceOption("es_ES-sharvard-medium", "Spanish (Spain) - Male (Sharvard) - Medium")
+)
+
 @Composable
-fun SettingsScreen(settingsRepository: SettingsRepository) {
+fun SettingsScreen(
+    settingsRepository: SettingsRepository,
+    audioController: AudioController? = null
+) {
     var apiKey by remember { mutableStateOf(settingsRepository.getApiKey() ?: "") }
+    var selectedEnglishVoice by remember { mutableStateOf(settingsRepository.getEnglishVoice()) }
+    var selectedSpanishVoice by remember { mutableStateOf(settingsRepository.getSpanishVoice()) }
     var savedMessage by remember { mutableStateOf("") }
     val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
 
     Column(
-        modifier = Modifier.fillMaxSize().padding(16.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+            .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text("Settings", fontSize = 24.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(16.dp))
-        
-        Button(onClick = { uriHandler.openUri("https://aistudio.google.com/app/apikey") }) {
-            Text("Get Gemini API Key")
+
+        // Gemini AI Section
+        Card(
+            modifier = Modifier.fillMaxWidth(0.9f).padding(8.dp),
+            elevation = 4.dp
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text("Gemini AI Integration", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(8.dp))
+                Button(onClick = { uriHandler.openUri("https://aistudio.google.com/app/apikey") }) {
+                    Text("Get Gemini API Key")
+                }
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = apiKey,
+                    onValueChange = { apiKey = it },
+                    label = { Text("Gemini API Key") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
         }
-        
+
         Spacer(Modifier.height(16.dp))
-        
-        OutlinedTextField(
-            value = apiKey,
-            onValueChange = { apiKey = it },
-            label = { Text("Gemini API Key") },
-            modifier = Modifier.fillMaxWidth(0.8f)
-        )
-        Spacer(Modifier.height(16.dp))
-        Button(onClick = {
-            settingsRepository.saveApiKey(apiKey)
-            savedMessage = "Saved!"
-        }) {
-            Text("Save")
+
+        // Text-To-Speech Section
+        Card(
+            modifier = Modifier.fillMaxWidth(0.9f).padding(8.dp),
+            elevation = 4.dp
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text("Text-To-Speech (Piper TTS)", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    "Select neural voice models for English and Spanish practice drills.",
+                    fontSize = 14.sp,
+                    color = Color.Gray
+                )
+                Spacer(Modifier.height(16.dp))
+
+                // English Voice Selection
+                Text("English Voice:", fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(4.dp))
+                englishVoices.forEach { option ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                    ) {
+                        RadioButton(
+                            selected = (selectedEnglishVoice == option.id),
+                            onClick = {
+                                selectedEnglishVoice = option.id
+                                settingsRepository.saveEnglishVoice(option.id)
+                            }
+                        )
+                        Text(
+                            text = option.friendlyName,
+                            modifier = Modifier.weight(1f).clickable {
+                                selectedEnglishVoice = option.id
+                                settingsRepository.saveEnglishVoice(option.id)
+                            }
+                        )
+                    }
+                }
+                Button(
+                    onClick = {
+                        audioController?.speak("Hello! This is a test of the selected English voice.", "en")
+                    },
+                    modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
+                ) {
+                    Text("🔊 Test English Voice")
+                }
+
+                Divider(modifier = Modifier.padding(vertical = 12.dp))
+
+                // Spanish Voice Selection
+                Text("Spanish Voice:", fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(4.dp))
+                spanishVoices.forEach { option ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                    ) {
+                        RadioButton(
+                            selected = (selectedSpanishVoice == option.id),
+                            onClick = {
+                                selectedSpanishVoice = option.id
+                                settingsRepository.saveSpanishVoice(option.id)
+                            }
+                        )
+                        Text(
+                            text = option.friendlyName,
+                            modifier = Modifier.weight(1f).clickable {
+                                selectedSpanishVoice = option.id
+                                settingsRepository.saveSpanishVoice(option.id)
+                            }
+                        )
+                    }
+                }
+                Button(
+                    onClick = {
+                        audioController?.speak("¡Hola! Esta es una muestra de la voz en español seleccionada.", "es")
+                    },
+                    modifier = Modifier.padding(top = 4.dp)
+                ) {
+                    Text("🔊 Test Spanish Voice")
+                }
+            }
         }
+
+        Spacer(Modifier.height(24.dp))
+
+        Button(
+            onClick = {
+                settingsRepository.saveApiKey(apiKey)
+                settingsRepository.saveEnglishVoice(selectedEnglishVoice)
+                settingsRepository.saveSpanishVoice(selectedSpanishVoice)
+                savedMessage = "Settings saved successfully!"
+            },
+            modifier = Modifier.fillMaxWidth(0.5f)
+        ) {
+            Text("Save All Settings")
+        }
+
         if (savedMessage.isNotEmpty()) {
             Spacer(Modifier.height(8.dp))
-            Text(savedMessage, color = Color.Green)
+            Text(savedMessage, color = Color(0xFF2E7D32), fontWeight = FontWeight.Medium)
         }
     }
 }

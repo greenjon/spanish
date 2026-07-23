@@ -16,3 +16,12 @@ shared/shared.podspec
 
 # Vosk model
 vosk-model-es/
+
+# Piper TTS local binaries & models
+desktopApp/piper/bin/
+desktopApp/piper/models/
+
+# Python venvs
+venv/
+**/venv/
+
