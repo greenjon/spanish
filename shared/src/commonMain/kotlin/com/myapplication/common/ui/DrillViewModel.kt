@@ -55,6 +55,7 @@ data class DrillConfig(
 }
 
 sealed class DrillState {
+    object Idle : DrillState()
     object Loading : DrillState()
     data class Active(
         val card: VocabCard,
@@ -75,7 +76,7 @@ class DrillViewModel(
     private val geminiService: GeminiService
 ) {
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
-    private val _uiState = MutableStateFlow<DrillState>(DrillState.Loading)
+    private val _uiState = MutableStateFlow<DrillState>(DrillState.Idle)
     val uiState: StateFlow<DrillState> = _uiState
 
     private var currentReviewState: ReviewState? = null

@@ -44,7 +44,7 @@ import org.jetbrains.compose.resources.ExperimentalResourceApi
 import org.jetbrains.compose.resources.resource
 
 enum class Screen {
-    HOME, DRILL, SETTINGS
+    HOME, SETTINGS
 }
 
 @OptIn(ExperimentalResourceApi::class)
@@ -94,13 +94,9 @@ fun App(
                 } else {
                     when (currentScreen) {
                         Screen.HOME -> HomeScreen(
-                            vocabRepository = vocabRepository,
-                            onStartDrill = { filterSpec, config ->
-                                drillViewModel.startSession(filterSpec, config)
-                                currentScreen = Screen.DRILL
-                            }
+                            drillViewModel = drillViewModel,
+                            vocabRepository = vocabRepository
                         )
-                        Screen.DRILL -> DrillScreen(drillViewModel)
                         Screen.SETTINGS -> SettingsScreen(settingsRepository)
                     }
                 }
@@ -509,8 +505,8 @@ fun FacetedTagFilterCard(
 
 @Composable
 fun HomeScreen(
-    vocabRepository: VocabRepository,
-    onStartDrill: (TagFilterSpec, DrillConfig) -> Unit
+    drillViewModel: DrillViewModel,
+    vocabRepository: VocabRepository
 ) {
     var filterSpec by remember { mutableStateOf(TagFilterSpec()) }
     var matchingCardCount by remember { mutableStateOf(805) }
@@ -520,6 +516,8 @@ fun HomeScreen(
     var userAction by remember { mutableStateOf("writes") }
     var userLanguage by remember { mutableStateOf("Spanish") }
     var progressionMode by remember { mutableStateOf(ProgressionMode.RANDOM) }
+
+    val drillState by drillViewModel.uiState.collectAsState()
 
     LaunchedEffect(filterSpec) {
         matchingCardCount = vocabRepository.getMatchingCardCount(filterSpec)
@@ -615,7 +613,7 @@ fun HomeScreen(
                                     userLanguage = userLanguage,
                                     progressionMode = progressionMode
                                 )
-                                onStartDrill(filterSpec, config)
+                                drillViewModel.startSession(filterSpec, config)
                             },
                             enabled = matchingCardCount > 0,
                             shape = RoundedCornerShape(8.dp),
@@ -657,6 +655,48 @@ fun HomeScreen(
                             color = Color.DarkGray,
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center
                         )
+                    }
+                }
+            }
+
+            // Inline Drill Section
+            if (drillState !is DrillState.Idle) {
+                Spacer(Modifier.height(24.dp))
+
+                Card(
+                    modifier = Modifier.fillMaxWidth(0.95f),
+                    elevation = 4.dp,
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Box(
+                        modifier = Modifier.padding(20.dp).fillMaxWidth(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        when (val s = drillState) {
+                            is DrillState.Loading -> CircularProgressIndicator()
+                            is DrillState.Finished -> {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text("🎉 You've finished all matching cards!", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                                    Spacer(Modifier.height(12.dp))
+                                    Button(onClick = {
+                                        val config = DrillConfig(
+                                            appAction = appAction,
+                                            appLanguage = appLanguage,
+                                            userAction = userAction,
+                                            userLanguage = userLanguage,
+                                            progressionMode = progressionMode
+                                        )
+                                        drillViewModel.startSession(filterSpec, config)
+                                    }) {
+                                        Text("Drill Again")
+                                    }
+                                }
+                            }
+                            is DrillState.Active -> {
+                                ActiveDrillView(s, drillViewModel)
+                            }
+                            is DrillState.Idle -> {}
+                        }
                     }
                 }
             }
@@ -714,6 +754,7 @@ fun DrillScreen(viewModel: DrillViewModel) {
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         when (val s = state) {
+            is DrillState.Idle -> {}
             is DrillState.Loading -> CircularProgressIndicator()
             is DrillState.Finished -> {
                 Text("You've finished all cards!", fontSize = 24.sp)
