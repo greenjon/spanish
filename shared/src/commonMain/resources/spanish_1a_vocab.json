@@ -1357,7 +1357,7 @@
   {
     "id": "conj_ser_yo",
     "spanish": "yo soy",
-    "english": "I be",
+    "english": "I am",
     "tags": [
       "1A",
       "ch1",
@@ -1374,7 +1374,7 @@
   {
     "id": "conj_ser_tú",
     "spanish": "tú eres",
-    "english": "you (fam.) be",
+    "english": "you (fam.) are",
     "tags": [
       "1A",
       "ch1",
@@ -1391,7 +1391,7 @@
   {
     "id": "conj_ser_él",
     "spanish": "él es",
-    "english": "he bes",
+    "english": "he is",
     "tags": [
       "1A",
       "ch1",
@@ -1408,7 +1408,7 @@
   {
     "id": "conj_ser_ella",
     "spanish": "ella es",
-    "english": "she bes",
+    "english": "she is",
     "tags": [
       "1A",
       "ch1",
@@ -1425,7 +1425,7 @@
   {
     "id": "conj_ser_nosotros",
     "spanish": "nosotros somos",
-    "english": "we be",
+    "english": "we are",
     "tags": [
       "1A",
       "ch1",
@@ -1442,7 +1442,7 @@
   {
     "id": "conj_ser_ellos",
     "spanish": "ellos son",
-    "english": "they (m.) be",
+    "english": "they (m.) are",
     "tags": [
       "1A",
       "ch1",
@@ -1459,7 +1459,7 @@
   {
     "id": "conj_ser_ellas",
     "spanish": "ellas son",
-    "english": "they (f.) be",
+    "english": "they (f.) are",
     "tags": [
       "1A",
       "ch1",
@@ -3337,7 +3337,7 @@
   {
     "id": "conj_estar_yo",
     "spanish": "yo estoy",
-    "english": "I be",
+    "english": "I am",
     "tags": [
       "1A",
       "ch2",
@@ -3354,7 +3354,7 @@
   {
     "id": "conj_estar_tú",
     "spanish": "tú estás",
-    "english": "you (fam.) be",
+    "english": "you (fam.) are",
     "tags": [
       "1A",
       "ch2",
@@ -3371,7 +3371,7 @@
   {
     "id": "conj_estar_él",
     "spanish": "él está",
-    "english": "he bes",
+    "english": "he is",
     "tags": [
       "1A",
       "ch2",
@@ -3388,7 +3388,7 @@
   {
     "id": "conj_estar_ella",
     "spanish": "ella está",
-    "english": "she bes",
+    "english": "she is",
     "tags": [
       "1A",
       "ch2",
@@ -3405,7 +3405,7 @@
   {
     "id": "conj_estar_nosotros",
     "spanish": "nosotros estamos",
-    "english": "we be",
+    "english": "we are",
     "tags": [
       "1A",
       "ch2",
@@ -3422,7 +3422,7 @@
   {
     "id": "conj_estar_ellos",
     "spanish": "ellos están",
-    "english": "they (m.) be",
+    "english": "they (m.) are",
     "tags": [
       "1A",
       "ch2",
@@ -3439,7 +3439,7 @@
   {
     "id": "conj_estar_ellas",
     "spanish": "ellas están",
-    "english": "they (f.) be",
+    "english": "they (f.) are",
     "tags": [
       "1A",
       "ch2",
@@ -7331,7 +7331,7 @@
   {
     "id": "conj_tener_él",
     "spanish": "él tiene",
-    "english": "he haves",
+    "english": "he has",
     "tags": [
       "1A",
       "ch3",
@@ -7348,7 +7348,7 @@
   {
     "id": "conj_tener_ella",
     "spanish": "ella tiene",
-    "english": "she haves",
+    "english": "she has",
     "tags": [
       "1A",
       "ch3",
@@ -10853,7 +10853,7 @@
   {
     "id": "conj_poder_yo",
     "spanish": "yo puedo",
-    "english": "I be able to",
+    "english": "I am able to / I can",
     "tags": [
       "1A",
       "ch4",
@@ -10870,7 +10870,7 @@
   {
     "id": "conj_poder_tú",
     "spanish": "tú puedes",
-    "english": "you (fam.) be able to",
+    "english": "you (fam.) are able to / you (fam.) can",
     "tags": [
       "1A",
       "ch4",
@@ -10887,7 +10887,7 @@
   {
     "id": "conj_poder_él",
     "spanish": "él puede",
-    "english": "he be able toes",
+    "english": "he is able to / he can",
     "tags": [
       "1A",
       "ch4",
@@ -10904,7 +10904,7 @@
   {
     "id": "conj_poder_ella",
     "spanish": "ella puede",
-    "english": "she be able toes",
+    "english": "she is able to / she can",
     "tags": [
       "1A",
       "ch4",
@@ -10921,7 +10921,7 @@
   {
     "id": "conj_poder_nosotros",
     "spanish": "nosotros podemos",
-    "english": "we be able to",
+    "english": "we are able to / we can",
     "tags": [
       "1A",
       "ch4",
@@ -10938,7 +10938,7 @@
   {
     "id": "conj_poder_ellos",
     "spanish": "ellos pueden",
-    "english": "they (m.) be able to",
+    "english": "they (m.) are able to / they (m.) can",
     "tags": [
       "1A",
       "ch4",
@@ -10955,7 +10955,7 @@
   {
     "id": "conj_poder_ellas",
     "spanish": "ellas pueden",
-    "english": "they (f.) be able to",
+    "english": "they (f.) are able to / they (f.) can",
     "tags": [
       "1A",
       "ch4",
