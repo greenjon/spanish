@@ -66,7 +66,8 @@ sealed class DrillState {
         val aiGeneratedText: String? = null,
         val isListening: Boolean = false,
         val isRevealed: Boolean = false,
-        val isCorrect: Boolean = false
+        val isCorrect: Boolean = false,
+        val isProcessingVoice: Boolean = false
     ) : DrillState()
     object Finished : DrillState()
 }
@@ -161,21 +162,31 @@ class DrillViewModel(
         if (state is DrillState.Active) {
             if (state.isListening) {
                 audioController.stopListening()
-                _uiState.value = state.copy(isListening = false)
+                _uiState.value = state.copy(isListening = false, isProcessingVoice = true)
             } else {
-                _uiState.value = state.copy(isListening = true)
+                _uiState.value = state.copy(isListening = true, userInput = "", isProcessingVoice = false)
                 val langCode = if (state.config.isUserEnglish) "en" else "es"
                 audioController.startListening(
                     lang = langCode,
                     onResult = { result ->
-                        _uiState.value = (_uiState.value as DrillState.Active).copy(
-                            userInput = result,
-                            isListening = false
-                        )
-                        checkAnswer() // Auto-check on final result
+                        val currentState = _uiState.value
+                        if (currentState is DrillState.Active) {
+                            _uiState.value = currentState.copy(
+                                userInput = result,
+                                isListening = false,
+                                isProcessingVoice = false
+                            )
+                            checkAnswer() // Auto-check on final result
+                        }
                     },
                     onPartial = { partial ->
-                        _uiState.value = (_uiState.value as DrillState.Active).copy(userInput = partial)
+                        val currentState = _uiState.value
+                        if (currentState is DrillState.Active) {
+                            _uiState.value = currentState.copy(
+                                userInput = partial,
+                                isProcessingVoice = false
+                            )
+                        }
                     }
                 )
             }

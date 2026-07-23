@@ -1103,7 +1103,7 @@ fun ActiveDrillView(
                     textFieldValue = it
                 },
                 label = { Text("Your answer ($targetLangName)") },
-                enabled = !state.isRevealed,
+                enabled = !state.isRevealed && !state.isProcessingVoice,
                 modifier = Modifier.fillMaxWidth(0.8f).focusRequester(inputFocusRequester),
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
@@ -1138,9 +1138,15 @@ fun ActiveDrillView(
                 colors = ButtonDefaults.buttonColors(
                     backgroundColor = if (state.isListening) Color.Red else MaterialTheme.colors.primary
                 ),
-                enabled = !state.isRevealed
+                enabled = !state.isRevealed && !state.isProcessingVoice
             ) {
-                Text(if (state.isListening) "Stop Listening" else "Start Speaking")
+                Text(
+                    when {
+                        state.isProcessingVoice -> "Processing Audio..."
+                        state.isListening -> "Stop Listening"
+                        else -> "Start Speaking"
+                    }
+                )
             }
         }
 
@@ -1158,8 +1164,13 @@ fun ActiveDrillView(
         Spacer(Modifier.height(16.dp))
 
         if (!state.isRevealed) {
-            Button(onClick = { viewModel.checkAnswer() }) {
-                Text("Check Answer")
+            if (!config.isUserSpeaking) {
+                Button(
+                    onClick = { viewModel.checkAnswer() },
+                    enabled = !state.isProcessingVoice
+                ) {
+                    Text(if (state.isProcessingVoice) "Processing Audio..." else "Check Answer")
+                }
             }
         } else {
             Text(if (state.isCorrect) "Correct!" else "Incorrect", 
