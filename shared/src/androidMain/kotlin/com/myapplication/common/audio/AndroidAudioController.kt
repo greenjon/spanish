@@ -13,6 +13,7 @@ class AndroidAudioController(private val context: Context) : AudioController, Te
     private var tts: TextToSpeech? = null
     private var speechRecognizer: SpeechRecognizer? = null
     private var isTtsReady = false
+    private var pendingSpeakRequest: Pair<String, String>? = null
     
     private var onResultCallback: ((String) -> Unit)? = null
     private var onPartialCallback: ((String) -> Unit)? = null
@@ -24,9 +25,10 @@ class AndroidAudioController(private val context: Context) : AudioController, Te
 
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
-            val result = tts?.setLanguage(Locale("es", "ES"))
-            if (result != TextToSpeech.LANG_MISSING_DATA && result != TextToSpeech.LANG_NOT_SUPPORTED) {
-                isTtsReady = true
+            isTtsReady = true
+            pendingSpeakRequest?.let { (text, lang) ->
+                speak(text, lang)
+                pendingSpeakRequest = null
             }
         }
     }
@@ -61,20 +63,30 @@ class AndroidAudioController(private val context: Context) : AudioController, Te
     }
 
     override fun speak(text: String, lang: String) {
-        if (isTtsReady) {
-            val locale = if (lang.equals("en", ignoreCase = true)) Locale.US else Locale("es", "ES")
-            tts?.setLanguage(locale)
-            tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, null)
+        if (!isTtsReady) {
+            pendingSpeakRequest = Pair(text, lang)
+            return
         }
+        val locale = if (lang.equals("en", ignoreCase = true)) Locale.US else Locale("es", "ES")
+        val result = tts?.setLanguage(locale)
+        if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
+            val fallbackLocale = if (lang.equals("en", ignoreCase = true)) Locale.ENGLISH else Locale("es")
+            tts?.setLanguage(fallbackLocale)
+        }
+        tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, null)
     }
 
-    override fun startListening(onResult: (String) -> Unit, onPartial: (String) -> Unit) {
+    override fun startListening(lang: String, onResult: (String) -> Unit, onPartial: (String) -> Unit) {
         this.onResultCallback = onResult
         this.onPartialCallback = onPartial
 
+        val langTag = if (lang.equals("en", ignoreCase = true)) "en-US" else "es-ES"
+
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "es-ES")
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, langTag)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, langTag)
+            putExtra(RecognizerIntent.EXTRA_ONLY_RETURN_LANGUAGE_PREFERENCE, true)
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
         }
         speechRecognizer?.startListening(intent)

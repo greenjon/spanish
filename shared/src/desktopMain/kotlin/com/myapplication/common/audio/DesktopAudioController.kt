@@ -22,24 +22,51 @@ class DesktopAudioController : AudioController {
     override fun speak(text: String, lang: String) {
         scope.launch {
             try {
-                // Using espeak for Linux desktop TTS with selected language voice
                 val voice = if (lang.equals("en", ignoreCase = true)) "en" else "es"
-                val process = ProcessBuilder("espeak", "-v", voice, text).start()
-                process.waitFor()
+
+                // Attempt Linux spd-say first
+                if (tryRunProcess("spd-say", "-l", voice, text)) return@launch
+
+                // Attempt espeak-ng / espeak
+                if (tryRunProcess("espeak-ng", "-v", voice, text)) return@launch
+                if (tryRunProcess("espeak", "-v", voice, text)) return@launch
+
+                // Attempt macOS say
+                val macOSVoice = if (voice == "en") "Alex" else "Monica"
+                if (tryRunProcess("say", "-v", macOSVoice, text)) return@launch
             } catch (e: Exception) {
                 e.printStackTrace()
             }
         }
     }
 
-    override fun startListening(onResult: (String) -> Unit, onPartial: (String) -> Unit) {
+    private fun tryRunProcess(vararg command: String): Boolean {
+        return try {
+            val process = ProcessBuilder(*command).start()
+            val exitCode = process.waitFor()
+            exitCode == 0
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    override fun startListening(lang: String, onResult: (String) -> Unit, onPartial: (String) -> Unit) {
         if (listeningJob?.isActive == true) return
 
         listeningJob = scope.launch {
             try {
-                val modelPath = "vosk-model-es"
+                val targetLang = if (lang.equals("en", ignoreCase = true)) "en" else "es"
+                var modelPath = "vosk-model-$targetLang"
                 if (!File(modelPath).exists()) {
-                    println("Vosk model not found at $modelPath. Please download 'vosk-model-small-es-0.42' and extract to 'vosk-model-es'.")
+                    modelPath = "vosk-model-small-$targetLang"
+                }
+                if (!File(modelPath).exists()) {
+                    // Fallback to vosk-model-es if language-specific model not found
+                    modelPath = "vosk-model-es"
+                }
+
+                if (!File(modelPath).exists()) {
+                    println("Vosk model not found at $modelPath.")
                     return@launch
                 }
 

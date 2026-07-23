@@ -156,7 +156,9 @@ class DrillViewModel(
                 _uiState.value = state.copy(isListening = false)
             } else {
                 _uiState.value = state.copy(isListening = true)
+                val langCode = if (state.config.isUserEnglish) "en" else "es"
                 audioController.startListening(
+                    lang = langCode,
                     onResult = { result ->
                         _uiState.value = (_uiState.value as DrillState.Active).copy(
                             userInput = result,
@@ -184,7 +186,9 @@ class DrillViewModel(
             _uiState.value = state.copy(isRevealed = true, isCorrect = isCorrect)
             
             if (isCorrect) {
-                audioController.speak("¡Correcto!", "es")
+                val praise = if (state.config.isUserEnglish) "Correct!" else "¡Correcto!"
+                val praiseLang = if (state.config.isUserEnglish) "en" else "es"
+                audioController.speak(praise, praiseLang)
             } else {
                 val feedback = if (state.config.isUserSpanish) "La respuesta correcta es $targetAnswer" else "The correct answer is $targetAnswer"
                 val feedbackLang = if (state.config.isUserSpanish) "es" else "en"
