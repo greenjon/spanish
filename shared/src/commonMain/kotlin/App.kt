@@ -18,6 +18,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.Placeable
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.rememberScrollState
@@ -202,18 +206,83 @@ fun SentenceDropdown(
 }
 
 @Composable
+fun FlowRow(
+    modifier: Modifier = Modifier,
+    horizontalGap: Dp = 6.dp,
+    verticalGap: Dp = 6.dp,
+    content: @Composable () -> Unit
+) {
+    Layout(
+        content = content,
+        modifier = modifier
+    ) { measurables, constraints ->
+        val horizontalGapPx = horizontalGap.roundToPx()
+        val verticalGapPx = verticalGap.roundToPx()
+
+        val rows = mutableListOf<List<Placeable>>()
+        val rowHeights = mutableListOf<Int>()
+        var currentRow = mutableListOf<Placeable>()
+        var currentRowWidth = 0
+        var currentRowHeight = 0
+
+        val placeables = measurables.map { measurable ->
+            measurable.measure(constraints.copy(minWidth = 0, minHeight = 0))
+        }
+
+        for (placeable in placeables) {
+            val neededWidth = if (currentRow.isEmpty()) {
+                placeable.width
+            } else {
+                currentRowWidth + horizontalGapPx + placeable.width
+            }
+
+            if (neededWidth <= constraints.maxWidth || currentRow.isEmpty()) {
+                currentRow.add(placeable)
+                currentRowWidth = neededWidth
+                currentRowHeight = maxOf(currentRowHeight, placeable.height)
+            } else {
+                rows.add(currentRow)
+                rowHeights.add(currentRowHeight)
+                currentRow = mutableListOf(placeable)
+                currentRowWidth = placeable.width
+                currentRowHeight = placeable.height
+            }
+        }
+        if (currentRow.isNotEmpty()) {
+            rows.add(currentRow)
+            rowHeights.add(currentRowHeight)
+        }
+
+        val totalHeight = if (rows.isEmpty()) 0 else rowHeights.sum() + (rows.size - 1) * verticalGapPx
+
+        layout(width = constraints.maxWidth, height = totalHeight) {
+            var y = 0
+            for (i in rows.indices) {
+                val row = rows[i]
+                val height = rowHeights[i]
+                var x = 0
+                for (placeable in row) {
+                    placeable.placeRelative(x = x, y = y)
+                    x += placeable.width + horizontalGapPx
+                }
+                y += height + verticalGapPx
+            }
+        }
+    }
+}
+
+@Composable
 fun TagChip(
     label: String,
     isSelected: Boolean,
-    onToggle: () -> Unit
+    onToggle: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Surface(
         shape = RoundedCornerShape(16.dp),
         color = if (isSelected) MaterialTheme.colors.primary else MaterialTheme.colors.onSurface.copy(alpha = 0.08f),
         elevation = if (isSelected) 2.dp else 0.dp,
-        modifier = Modifier
-            .padding(horizontal = 4.dp, vertical = 3.dp)
-            .clickable { onToggle() }
+        modifier = modifier.clickable { onToggle() }
     ) {
         Text(
             text = label,
@@ -375,33 +444,29 @@ fun FacetedTagFilterCard(
                         }
                     }
                 ) {
-                    val rows = category.options.chunked(3)
-                    Column {
-                        rows.forEach { rowItems ->
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
-                                horizontalArrangement = Arrangement.Start
-                            ) {
-                                rowItems.forEach { option ->
-                                    val isSelected = selectedSet.contains(option.tag)
-                                    TagChip(
-                                        label = option.label,
-                                        isSelected = isSelected,
-                                        onToggle = {
-                                            val newSet = if (isSelected) selectedSet - option.tag else selectedSet + option.tag
-                                            val updatedSpec = when (category.title) {
-                                                TagCategories.chapters.title -> filterSpec.copy(chapters = newSet)
-                                                TagCategories.partsOfSpeech.title -> filterSpec.copy(partsOfSpeech = newSet)
-                                                TagCategories.verbTypes.title -> filterSpec.copy(verbTypes = newSet)
-                                                TagCategories.topics.title -> filterSpec.copy(topics = newSet)
-                                                TagCategories.grammarTags.title -> filterSpec.copy(grammarTags = newSet)
-                                                else -> filterSpec
-                                            }
-                                            onFilterSpecChange(updatedSpec)
-                                        }
-                                    )
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalGap = 6.dp,
+                        verticalGap = 6.dp
+                    ) {
+                        category.options.forEach { option ->
+                            val isSelected = selectedSet.contains(option.tag)
+                            TagChip(
+                                label = option.label,
+                                isSelected = isSelected,
+                                onToggle = {
+                                    val newSet = if (isSelected) selectedSet - option.tag else selectedSet + option.tag
+                                    val updatedSpec = when (category.title) {
+                                        TagCategories.chapters.title -> filterSpec.copy(chapters = newSet)
+                                        TagCategories.partsOfSpeech.title -> filterSpec.copy(partsOfSpeech = newSet)
+                                        TagCategories.verbTypes.title -> filterSpec.copy(verbTypes = newSet)
+                                        TagCategories.topics.title -> filterSpec.copy(topics = newSet)
+                                        TagCategories.grammarTags.title -> filterSpec.copy(grammarTags = newSet)
+                                        else -> filterSpec
+                                    }
+                                    onFilterSpecChange(updatedSpec)
                                 }
-                            }
+                            )
                         }
                     }
                 }
@@ -650,9 +715,12 @@ fun DrillScreen(viewModel: DrillViewModel) {
 @Composable
 fun ActiveDrillView(state: DrillState.Active, viewModel: DrillViewModel) {
     val focusRequester = remember { FocusRequester() }
+    val inputFocusRequester = remember { FocusRequester() }
     
-    LaunchedEffect(state.isRevealed) {
-        if (state.isRevealed) {
+    LaunchedEffect(state.card.id, state.isRevealed) {
+        if (!state.isRevealed && state.config.isUserWriting) {
+            inputFocusRequester.requestFocus()
+        } else if (state.isRevealed) {
             focusRequester.requestFocus()
         }
     }
@@ -757,7 +825,7 @@ fun ActiveDrillView(state: DrillState.Active, viewModel: DrillViewModel) {
                 },
                 label = { Text("Your answer ($targetLangName)") },
                 enabled = !state.isRevealed,
-                modifier = Modifier.fillMaxWidth(0.8f),
+                modifier = Modifier.fillMaxWidth(0.8f).focusRequester(inputFocusRequester),
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = { viewModel.checkAnswer() })
@@ -778,6 +846,7 @@ fun ActiveDrillView(state: DrillState.Active, viewModel: DrillViewModel) {
                         )
                         textFieldValue = newValue
                         viewModel.onUserInputChanged(newText)
+                        inputFocusRequester.requestFocus()
                     }
                 )
             }
