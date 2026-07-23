@@ -28,5 +28,33 @@ class SettingsRepository {
     fun saveSpanishVoice(voice: String) {
         settings.putString("spanish_tts_voice", voice)
     }
+
+    // Drill settings persistence
+    fun getAppAction(): String = settings.getString("drill_app_action", "writes")
+    fun saveAppAction(action: String) = settings.putString("drill_app_action", action)
+
+    fun getAppLanguage(): String = settings.getString("drill_app_lang", "English")
+    fun saveAppLanguage(lang: String) = settings.putString("drill_app_lang", lang)
+
+    fun getUserAction(): String = settings.getString("drill_user_action", "writes")
+    fun saveUserAction(action: String) = settings.putString("drill_user_action", action)
+
+    fun getUserLanguage(): String = settings.getString("drill_user_lang", "Spanish")
+    fun saveUserLanguage(lang: String) = settings.putString("drill_user_lang", lang)
+
+    fun getProgressionMode(): String = settings.getString("drill_progression_mode", "RANDOM")
+    fun saveProgressionMode(modeName: String) = settings.putString("drill_progression_mode", modeName)
+
+    // Window dimensions persistence
+    fun getWindowSize(): Pair<Int, Int> {
+        val width = settings.getInt("window_width", 1000)
+        val height = settings.getInt("window_height", 800)
+        return Pair(width, height)
+    }
+
+    fun saveWindowSize(width: Int, height: Int) {
+        settings.putInt("window_width", width)
+        settings.putInt("window_height", height)
+    }
 }
 

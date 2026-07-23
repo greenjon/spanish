@@ -20,14 +20,16 @@ class DesktopAudioController(
     private var microphone: TargetDataLine? = null
 
     override fun speak(text: String, lang: String) {
+        val cleanText = text.replace(Regex("\\([^)]*\\)"), " ").replace(Regex("\\s+"), " ").trim()
+        if (cleanText.isEmpty()) return
         scope.launch {
             try {
-                if (trySpeakPiper(text, lang)) return@launch
+                if (trySpeakPiper(cleanText, lang)) return@launch
 
                 // Fallback to macOS say if Piper is missing or fails on macOS
                 val isEnglish = lang.startsWith("en", ignoreCase = true)
                 val macOSVoice = if (isEnglish) "Alex" else "Monica"
-                tryRunProcess("say", "-v", macOSVoice, text)
+                tryRunProcess("say", "-v", macOSVoice, cleanText)
             } catch (e: Exception) {
                 e.printStackTrace()
             }
@@ -249,12 +251,19 @@ class DesktopAudioController(
                         "--compute_type", "int8"
                     )
                     val process = pb.start()
-                    val result = process.inputStream.bufferedReader().readText().trim()
+                    val rawOutput = process.inputStream.bufferedReader().readText().trim()
                     val err = process.errorStream.bufferedReader().readText().trim()
                     process.waitFor()
 
-                    if (process.exitValue() == 0 && result.isNotBlank()) {
-                        outputText = result
+                    val transcriptLine = rawOutput.lines().firstOrNull { it.startsWith("TRANSCRIPT:") }
+                    val extractedText = if (transcriptLine != null) {
+                        transcriptLine.removePrefix("TRANSCRIPT:").trim()
+                    } else {
+                        rawOutput.lines().lastOrNull { it.isNotBlank() && !it.startsWith("Processing") }?.trim() ?: ""
+                    }
+
+                    if (process.exitValue() == 0 && extractedText.isNotBlank()) {
+                        outputText = extractedText
                         println("FasterWhisper result: $outputText")
                         break
                     } else if (err.isNotBlank()) {

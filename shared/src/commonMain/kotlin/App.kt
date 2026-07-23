@@ -100,7 +100,8 @@ fun App(
                     when (currentScreen) {
                         Screen.HOME -> HomeScreen(
                             drillViewModel = drillViewModel,
-                            vocabRepository = vocabRepository
+                            vocabRepository = vocabRepository,
+                            settingsRepository = settingsRepository
                         )
                         Screen.SETTINGS -> SettingsScreen(settingsRepository, audioController)
                     }
@@ -511,16 +512,25 @@ fun FacetedTagFilterCard(
 @Composable
 fun HomeScreen(
     drillViewModel: DrillViewModel,
-    vocabRepository: VocabRepository
+    vocabRepository: VocabRepository,
+    settingsRepository: SettingsRepository
 ) {
     var filterSpec by remember { mutableStateOf(TagFilterSpec()) }
     var matchingCardCount by remember { mutableStateOf(805) }
 
-    var appAction by remember { mutableStateOf("writes") }
-    var appLanguage by remember { mutableStateOf("English") }
-    var userAction by remember { mutableStateOf("writes") }
-    var userLanguage by remember { mutableStateOf("Spanish") }
-    var progressionMode by remember { mutableStateOf(ProgressionMode.RANDOM) }
+    var appAction by remember { mutableStateOf(settingsRepository.getAppAction()) }
+    var appLanguage by remember { mutableStateOf(settingsRepository.getAppLanguage()) }
+    var userAction by remember { mutableStateOf(settingsRepository.getUserAction()) }
+    var userLanguage by remember { mutableStateOf(settingsRepository.getUserLanguage()) }
+    var progressionMode by remember {
+        mutableStateOf(
+            try {
+                ProgressionMode.valueOf(settingsRepository.getProgressionMode())
+            } catch (e: Exception) {
+                ProgressionMode.RANDOM
+            }
+        )
+    }
 
     val drillState by drillViewModel.uiState.collectAsState()
 
@@ -528,14 +538,33 @@ fun HomeScreen(
         matchingCardCount = vocabRepository.getMatchingCardCount(filterSpec)
     }
 
+    fun updateAppAction(newAction: String) {
+        appAction = newAction
+        settingsRepository.saveAppAction(newAction)
+    }
+
     fun updateAppLanguage(newLang: String) {
         appLanguage = newLang
         userLanguage = if (newLang == "English") "Spanish" else "English"
+        settingsRepository.saveAppLanguage(appLanguage)
+        settingsRepository.saveUserLanguage(userLanguage)
+    }
+
+    fun updateUserAction(newAction: String) {
+        userAction = newAction
+        settingsRepository.saveUserAction(newAction)
     }
 
     fun updateUserLanguage(newLang: String) {
         userLanguage = newLang
         appLanguage = if (newLang == "English") "Spanish" else "English"
+        settingsRepository.saveUserLanguage(userLanguage)
+        settingsRepository.saveAppLanguage(appLanguage)
+    }
+
+    fun updateProgressionMode(newMode: ProgressionMode) {
+        progressionMode = newMode
+        settingsRepository.saveProgressionMode(newMode.name)
     }
 
     var selectedTabIndex by remember { mutableStateOf(0) }
@@ -622,7 +651,7 @@ fun HomeScreen(
                                 SentenceDropdown(
                                     options = listOf("speaks", "writes"),
                                     selected = appAction,
-                                    onSelect = { appAction = it }
+                                    onSelect = { updateAppAction(it) }
                                 )
                                 Text(" in ", fontSize = 18.sp, fontWeight = FontWeight.Medium)
                                 SentenceDropdown(
@@ -630,11 +659,11 @@ fun HomeScreen(
                                     selected = appLanguage,
                                     onSelect = { updateAppLanguage(it) }
                                 )
-                                Text(" and ", fontSize = 18.sp, fontWeight = FontWeight.Medium)
+                                Text(" and Student ", fontSize = 18.sp, fontWeight = FontWeight.Medium)
                                 SentenceDropdown(
                                     options = listOf("speaks", "writes"),
                                     selected = userAction,
-                                    onSelect = { userAction = it }
+                                    onSelect = { updateUserAction(it) }
                                 )
                                 Text(" in ", fontSize = 18.sp, fontWeight = FontWeight.Medium)
                                 SentenceDropdown(
@@ -674,7 +703,7 @@ fun HomeScreen(
                                 Spacer(Modifier.width(8.dp))
                                 ProgressionToggle(
                                     selectedMode = progressionMode,
-                                    onModeSelected = { progressionMode = it }
+                                    onModeSelected = { updateProgressionMode(it) }
                                 )
                             }
 

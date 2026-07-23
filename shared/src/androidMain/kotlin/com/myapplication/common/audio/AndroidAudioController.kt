@@ -63,8 +63,10 @@ class AndroidAudioController(private val context: Context) : AudioController, Te
     }
 
     override fun speak(text: String, lang: String) {
+        val cleanText = text.replace(Regex("\\([^)]*\\)"), " ").replace(Regex("\\s+"), " ").trim()
+        if (cleanText.isEmpty()) return
         if (!isTtsReady) {
-            pendingSpeakRequest = Pair(text, lang)
+            pendingSpeakRequest = Pair(cleanText, lang)
             return
         }
         val locale = if (lang.equals("en", ignoreCase = true)) Locale.US else Locale("es", "ES")
@@ -73,7 +75,7 @@ class AndroidAudioController(private val context: Context) : AudioController, Te
             val fallbackLocale = if (lang.equals("en", ignoreCase = true)) Locale.ENGLISH else Locale("es")
             tts?.setLanguage(fallbackLocale)
         }
-        tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, null)
+        tts?.speak(cleanText, TextToSpeech.QUEUE_FLUSH, null, null)
     }
 
     override fun startListening(lang: String, onResult: (String) -> Unit, onPartial: (String) -> Unit) {

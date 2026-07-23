@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 import sys
+import os
+import warnings
+warnings.filterwarnings("ignore")
 import argparse
-import json
 from faster_whisper import WhisperModel
 
 def transcribe_audio(audio_path, lang="es", model_size="small", compute_type="int8"):
@@ -9,7 +11,7 @@ def transcribe_audio(audio_path, lang="es", model_size="small", compute_type="in
         model = WhisperModel(model_size, device="cpu", compute_type=compute_type)
         segments, info = model.transcribe(audio_path, language=lang, beam_size=5)
         text = " ".join([segment.text.strip() for segment in segments]).strip()
-        print(text)
+        print(f"TRANSCRIPT:{text}")
     except Exception as e:
         sys.stderr.write(f"Error transcribing audio: {e}\n")
         sys.exit(1)

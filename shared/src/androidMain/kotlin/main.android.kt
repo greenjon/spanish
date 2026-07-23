@@ -16,7 +16,7 @@ import com.myapplication.common.ui.DrillViewModel
     val repository = remember { VocabRepository(dbDriverFactory) }
     val settingsRepository = remember { SettingsRepository() }
     val geminiService = remember { GeminiService(settingsRepository) }
-    val drillViewModel = remember { DrillViewModel(repository, audioController, geminiService) }
+    val drillViewModel = remember { DrillViewModel(repository, audioController, geminiService, settingsRepository) }
 
     App(drillViewModel, settingsRepository, repository)
 }
