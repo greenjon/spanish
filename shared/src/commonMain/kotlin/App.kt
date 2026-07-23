@@ -262,7 +262,8 @@ fun FlowRow(
                 val height = rowHeights[i]
                 var x = 0
                 for (placeable in row) {
-                    placeable.placeRelative(x = x, y = y)
+                    val yOffset = (height - placeable.height) / 2
+                    placeable.placeRelative(x = x, y = y + yOffset)
                     x += placeable.width + horizontalGapPx
                 }
                 y += height + verticalGapPx
@@ -351,17 +352,19 @@ fun CategoryAccordion(
 fun FacetedTagFilterCard(
     vocabRepository: VocabRepository,
     filterSpec: TagFilterSpec,
-    onFilterSpecChange: (TagFilterSpec) -> Unit
+    onFilterSpecChange: (TagFilterSpec) -> Unit,
+    modifier: Modifier = Modifier
 ) {
     var matchingCardCount by remember { mutableStateOf(805) }
     var expandedCategories by remember { mutableStateOf(setOf(TagCategories.chapters.title, TagCategories.partsOfSpeech.title)) }
+    var isFilterExpanded by remember { mutableStateOf(false) }
 
     LaunchedEffect(filterSpec) {
         matchingCardCount = vocabRepository.getMatchingCardCount(filterSpec)
     }
 
     Card(
-        modifier = Modifier.fillMaxWidth(0.9f),
+        modifier = modifier.fillMaxWidth(0.95f),
         elevation = 4.dp,
         shape = RoundedCornerShape(12.dp)
     ) {
@@ -370,17 +373,27 @@ fun FacetedTagFilterCard(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { isFilterExpanded = !isFilterExpanded },
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column {
-                    Text(
-                        text = "Vocabulary Filter",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colors.primary
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "Vocabulary Filter",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colors.primary
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = if (isFilterExpanded) "▲" else "▼",
+                            fontSize = 14.sp,
+                            color = MaterialTheme.colors.primary
+                        )
+                    }
                     Text(
                         text = if (filterSpec.isEmpty) "All categories active" else "${filterSpec.totalSelectedCount} filter(s) applied",
                         fontSize = 12.sp,
@@ -403,89 +416,91 @@ fun FacetedTagFilterCard(
                 }
             }
 
-            Spacer(Modifier.height(12.dp))
+            if (isFilterExpanded) {
+                Spacer(Modifier.height(12.dp))
 
-            if (filterSpec.totalSelectedCount > 0) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    TextButton(
-                        onClick = { onFilterSpecChange(TagFilterSpec()) },
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
-                    ) {
-                        Text("Clear All Filters", fontSize = 12.sp, color = MaterialTheme.colors.primary)
-                    }
-                }
-            }
-
-            // Categories
-            TagCategories.allCategories.forEach { category ->
-                val selectedSet = when (category.title) {
-                    TagCategories.chapters.title -> filterSpec.chapters
-                    TagCategories.partsOfSpeech.title -> filterSpec.partsOfSpeech
-                    TagCategories.verbTypes.title -> filterSpec.verbTypes
-                    TagCategories.topics.title -> filterSpec.topics
-                    TagCategories.grammarTags.title -> filterSpec.grammarTags
-                    else -> emptySet()
-                }
-
-                val isExpanded = expandedCategories.contains(category.title)
-
-                CategoryAccordion(
-                    title = category.title,
-                    selectedCount = selectedSet.size,
-                    isExpanded = isExpanded,
-                    onToggleExpand = {
-                        expandedCategories = if (isExpanded) {
-                            expandedCategories - category.title
-                        } else {
-                            expandedCategories + category.title
-                        }
-                    }
-                ) {
-                    FlowRow(
+                if (filterSpec.totalSelectedCount > 0) {
+                    Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalGap = 6.dp,
-                        verticalGap = 6.dp
+                        horizontalArrangement = Arrangement.End
                     ) {
-                        category.options.forEach { option ->
-                            val isSelected = selectedSet.contains(option.tag)
-                            TagChip(
-                                label = option.label,
-                                isSelected = isSelected,
-                                onToggle = {
-                                    val newSet = if (isSelected) selectedSet - option.tag else selectedSet + option.tag
-                                    val updatedSpec = when (category.title) {
-                                        TagCategories.chapters.title -> filterSpec.copy(chapters = newSet)
-                                        TagCategories.partsOfSpeech.title -> filterSpec.copy(partsOfSpeech = newSet)
-                                        TagCategories.verbTypes.title -> filterSpec.copy(verbTypes = newSet)
-                                        TagCategories.topics.title -> filterSpec.copy(topics = newSet)
-                                        TagCategories.grammarTags.title -> filterSpec.copy(grammarTags = newSet)
-                                        else -> filterSpec
-                                    }
-                                    onFilterSpecChange(updatedSpec)
-                                }
-                            )
+                        TextButton(
+                            onClick = { onFilterSpecChange(TagFilterSpec()) },
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                        ) {
+                            Text("Clear All Filters", fontSize = 12.sp, color = MaterialTheme.colors.primary)
                         }
                     }
                 }
-            }
 
-            if (matchingCardCount == 0) {
-                Spacer(Modifier.height(8.dp))
-                Surface(
-                    color = Color(0xFFFFEBEE),
-                    shape = RoundedCornerShape(8.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(
-                        text = "⚠️ No vocabulary cards match all your selected filters. Try removing some filters.",
-                        color = Color.Red,
-                        fontSize = 12.sp,
-                        modifier = Modifier.padding(10.dp),
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                    )
+                // Categories
+                TagCategories.allCategories.forEach { category ->
+                    val selectedSet = when (category.title) {
+                        TagCategories.chapters.title -> filterSpec.chapters
+                        TagCategories.partsOfSpeech.title -> filterSpec.partsOfSpeech
+                        TagCategories.verbTypes.title -> filterSpec.verbTypes
+                        TagCategories.topics.title -> filterSpec.topics
+                        TagCategories.grammarTags.title -> filterSpec.grammarTags
+                        else -> emptySet()
+                    }
+
+                    val isExpanded = expandedCategories.contains(category.title)
+
+                    CategoryAccordion(
+                        title = category.title,
+                        selectedCount = selectedSet.size,
+                        isExpanded = isExpanded,
+                        onToggleExpand = {
+                            expandedCategories = if (isExpanded) {
+                                expandedCategories - category.title
+                            } else {
+                                expandedCategories + category.title
+                            }
+                        }
+                    ) {
+                        FlowRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalGap = 6.dp,
+                            verticalGap = 6.dp
+                        ) {
+                            category.options.forEach { option ->
+                                val isSelected = selectedSet.contains(option.tag)
+                                TagChip(
+                                    label = option.label,
+                                    isSelected = isSelected,
+                                    onToggle = {
+                                        val newSet = if (isSelected) selectedSet - option.tag else selectedSet + option.tag
+                                        val updatedSpec = when (category.title) {
+                                            TagCategories.chapters.title -> filterSpec.copy(chapters = newSet)
+                                            TagCategories.partsOfSpeech.title -> filterSpec.copy(partsOfSpeech = newSet)
+                                            TagCategories.verbTypes.title -> filterSpec.copy(verbTypes = newSet)
+                                            TagCategories.topics.title -> filterSpec.copy(topics = newSet)
+                                            TagCategories.grammarTags.title -> filterSpec.copy(grammarTags = newSet)
+                                            else -> filterSpec
+                                        }
+                                        onFilterSpecChange(updatedSpec)
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                if (matchingCardCount == 0) {
+                    Spacer(Modifier.height(8.dp))
+                    Surface(
+                        color = Color(0xFFFFEBEE),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "⚠️ No vocabulary cards match all your selected filters. Try removing some filters.",
+                            color = Color.Red,
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(10.dp),
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                    }
                 }
             }
         }
@@ -523,133 +538,131 @@ fun HomeScreen(
     val scrollState = rememberScrollState()
 
     Column(
-        modifier = Modifier.fillMaxSize().verticalScroll(scrollState).padding(16.dp),
+        modifier = Modifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text("Ready to Drill?", fontSize = 26.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(16.dp))
-
-        FacetedTagFilterCard(
-            vocabRepository = vocabRepository,
-            filterSpec = filterSpec,
-            onFilterSpecChange = { filterSpec = it }
-        )
-
-        Spacer(Modifier.height(20.dp))
-
-        Card(
-            modifier = Modifier.fillMaxWidth(0.9f),
-            elevation = 4.dp,
-            shape = RoundedCornerShape(12.dp)
+        // Persistent top filter bar
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            contentAlignment = Alignment.Center
         ) {
-            Column(
-                modifier = Modifier.padding(20.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+            FacetedTagFilterCard(
+                vocabRepository = vocabRepository,
+                filterSpec = filterSpec,
+                onFilterSpecChange = { filterSpec = it }
+            )
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .verticalScroll(scrollState)
+                .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text("Ready to Drill?", fontSize = 26.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(16.dp))
+
+            Card(
+                modifier = Modifier.fillMaxWidth(0.95f),
+                elevation = 4.dp,
+                shape = RoundedCornerShape(12.dp)
             ) {
-                Text(
-                    text = "Configure Drill Sentence",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colors.primary
-                )
-                Spacer(Modifier.height(16.dp))
-
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center,
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text("App ", fontSize = 18.sp, fontWeight = FontWeight.Medium)
-                    SentenceDropdown(
-                        options = listOf("speaks", "writes"),
-                        selected = appAction,
-                        onSelect = { appAction = it }
-                    )
-                    Text(" in ", fontSize = 18.sp, fontWeight = FontWeight.Medium)
-                    SentenceDropdown(
-                        options = listOf("English", "Spanish"),
-                        selected = appLanguage,
-                        onSelect = { updateAppLanguage(it) }
-                    )
-                    Text(".", fontSize = 18.sp, fontWeight = FontWeight.Medium)
-                }
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalGap = 4.dp,
+                        verticalGap = 8.dp
+                    ) {
+                        Text("App ", fontSize = 18.sp, fontWeight = FontWeight.Medium)
+                        SentenceDropdown(
+                            options = listOf("speaks", "writes"),
+                            selected = appAction,
+                            onSelect = { appAction = it }
+                        )
+                        Text(" in ", fontSize = 18.sp, fontWeight = FontWeight.Medium)
+                        SentenceDropdown(
+                            options = listOf("English", "Spanish"),
+                            selected = appLanguage,
+                            onSelect = { updateAppLanguage(it) }
+                        )
+                        Text(" and ", fontSize = 18.sp, fontWeight = FontWeight.Medium)
+                        SentenceDropdown(
+                            options = listOf("speaks", "writes"),
+                            selected = userAction,
+                            onSelect = { userAction = it }
+                        )
+                        Text(" in ", fontSize = 18.sp, fontWeight = FontWeight.Medium)
+                        SentenceDropdown(
+                            options = listOf("English", "Spanish"),
+                            selected = userLanguage,
+                            onSelect = { updateUserLanguage(it) }
+                        )
+                        Text(".", fontSize = 18.sp, fontWeight = FontWeight.Medium)
+                        Spacer(Modifier.width(8.dp))
+                        Button(
+                            onClick = {
+                                val config = DrillConfig(
+                                    appAction = appAction,
+                                    appLanguage = appLanguage,
+                                    userAction = userAction,
+                                    userLanguage = userLanguage,
+                                    progressionMode = progressionMode
+                                )
+                                onStartDrill(filterSpec, config)
+                            },
+                            enabled = matchingCardCount > 0,
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.height(36.dp)
+                        ) {
+                            Text("Go", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
 
-                Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(16.dp))
 
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center,
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
-                ) {
-                    Text("User ", fontSize = 18.sp, fontWeight = FontWeight.Medium)
-                    SentenceDropdown(
-                        options = listOf("speaks", "writes"),
-                        selected = userAction,
-                        onSelect = { userAction = it }
-                    )
-                    Text(" in ", fontSize = 18.sp, fontWeight = FontWeight.Medium)
-                    SentenceDropdown(
-                        options = listOf("English", "Spanish"),
-                        selected = userLanguage,
-                        onSelect = { updateUserLanguage(it) }
-                    )
-                    Text(".", fontSize = 18.sp, fontWeight = FontWeight.Medium)
-                }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center,
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                    ) {
+                        Text("Order: ", fontSize = 16.sp, fontWeight = FontWeight.Medium)
+                        Spacer(Modifier.width(8.dp))
+                        ProgressionToggle(
+                            selectedMode = progressionMode,
+                            onModeSelected = { progressionMode = it }
+                        )
+                    }
 
-                Spacer(Modifier.height(12.dp))
+                    Spacer(Modifier.height(16.dp))
 
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center,
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
-                ) {
-                    Text("Order: ", fontSize = 16.sp, fontWeight = FontWeight.Medium)
-                    Spacer(Modifier.width(8.dp))
-                    ProgressionToggle(
-                        selectedMode = progressionMode,
-                        onModeSelected = { progressionMode = it }
-                    )
-                }
+                    val promptDesc = if (appAction == "speaks") "AI speaks $appLanguage audio" else "AI displays $appLanguage text"
+                    val userDesc = if (userAction == "speaks") "you speak $userLanguage into mic" else "you type $userLanguage"
 
-                Spacer(Modifier.height(16.dp))
-
-                val promptDesc = if (appAction == "speaks") "AI speaks $appLanguage audio" else "AI displays $appLanguage text"
-                val userDesc = if (userAction == "speaks") "you speak $userLanguage into mic" else "you type $userLanguage"
-
-                Surface(
-                    color = MaterialTheme.colors.primary.copy(alpha = 0.08f),
-                    shape = RoundedCornerShape(8.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(
-                        text = "💡 $promptDesc ➔ $userDesc (${progressionMode.name.lowercase()} order)",
-                        modifier = Modifier.padding(10.dp),
-                        fontSize = 13.sp,
-                        color = Color.DarkGray,
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                    )
+                    Surface(
+                        color = MaterialTheme.colors.primary.copy(alpha = 0.08f),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "💡 $promptDesc ➔ $userDesc (${progressionMode.name.lowercase()} order)",
+                            modifier = Modifier.padding(10.dp),
+                            fontSize = 13.sp,
+                            color = Color.DarkGray,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                    }
                 }
             }
-        }
 
-        Spacer(Modifier.height(24.dp))
-        Button(
-            onClick = {
-                val config = DrillConfig(
-                    appAction = appAction,
-                    appLanguage = appLanguage,
-                    userAction = userAction,
-                    userLanguage = userLanguage,
-                    progressionMode = progressionMode
-                )
-                onStartDrill(filterSpec, config)
-            },
-            enabled = matchingCardCount > 0,
-            modifier = Modifier.fillMaxWidth(0.5f).height(50.dp)
-        ) {
-            Text("Start Drilling", fontSize = 18.sp)
+            Spacer(Modifier.height(24.dp))
         }
-        Spacer(Modifier.height(24.dp))
     }
 }
 
