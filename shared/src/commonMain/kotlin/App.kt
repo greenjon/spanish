@@ -1133,7 +1133,7 @@ fun ActiveDrillView(
                 Text("Check Answer")
             }
         } else {
-            Text(if (state.isCorrect) "¡Correcto!" else "Incorrecto", 
+            Text(if (state.isCorrect) "Correct!" else "Incorrect", 
                 color = if (state.isCorrect) Color.Green else Color.Red,
                 fontSize = 20.sp, fontWeight = FontWeight.Bold
             )

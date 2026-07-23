@@ -196,11 +196,13 @@ class DesktopAudioController(
 
                 val pcmData = audioStream.toByteArray()
                 if (pcmData.isNotEmpty()) {
-                    val transcribedText = runFasterWhisper(pcmData, format, lang)
-                    if (transcribedText.isNotBlank()) {
-                        withContext(Dispatchers.Main) { onResult(transcribedText) }
-                    } else {
-                        withContext(Dispatchers.Main) { onPartial("") }
+                    withContext(NonCancellable) {
+                        val transcribedText = runFasterWhisper(pcmData, format, lang)
+                        if (transcribedText.isNotBlank()) {
+                            withContext(Dispatchers.Main) { onResult(transcribedText) }
+                        } else {
+                            withContext(Dispatchers.Main) { onPartial("") }
+                        }
                     }
                 }
             }
@@ -215,25 +217,29 @@ class DesktopAudioController(
             AudioSystem.write(audioInputStream, AudioFileFormat.Type.WAVE, tempWavFile)
 
             val scriptPaths = listOf(
-                "desktopApp/whisper/transcribe.py",
-                "whisper/transcribe.py",
-                "transcribe.py"
+                File("desktopApp/whisper/transcribe.py").absolutePath,
+                File("whisper/transcribe.py").absolutePath,
+                File("transcribe.py").absolutePath
             )
-            val scriptFile = scriptPaths.firstOrNull { File(it).exists() } ?: "desktopApp/whisper/transcribe.py"
+            val scriptFile = scriptPaths.firstOrNull { File(it).exists() } ?: File("desktopApp/whisper/transcribe.py").absolutePath
 
             val targetLang = if (lang.equals("en", ignoreCase = true)) "en" else "es"
 
             val pythonExecs = listOf(
-                "desktopApp/whisper/venv/bin/python",
-                "whisper/venv/bin/python",
-                "venv/bin/python",
+                File("desktopApp/whisper/venv/bin/python").absolutePath,
+                File("whisper/venv/bin/python").absolutePath,
+                File("venv/bin/python").absolutePath,
                 "python3",
                 "python"
             )
             var outputText = ""
 
             for (python in pythonExecs) {
+                if (python.contains(File.separator) && !File(python).exists()) {
+                    continue
+                }
                 try {
+                    println("Running FasterWhisper with python: $python, script: $scriptFile, audio: ${tempWavFile.absolutePath}")
                     val pb = ProcessBuilder(
                         python,
                         scriptFile,
@@ -249,9 +255,10 @@ class DesktopAudioController(
 
                     if (process.exitValue() == 0 && result.isNotBlank()) {
                         outputText = result
+                        println("FasterWhisper result: $outputText")
                         break
                     } else if (err.isNotBlank()) {
-                        println("FasterWhisper error output: $err")
+                        println("FasterWhisper error output ($python): $err")
                     }
                 } catch (e: Exception) {
                     println("Failed running python exec $python: ${e.message}")

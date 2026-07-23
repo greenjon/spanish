@@ -174,25 +174,30 @@ class DrillViewModel(
         }
     }
 
+    private fun normalizeForComparison(text: String): String {
+        return text.lowercase()
+            .replace(Regex("[.,!?¡¿;:\"'\\-_]"), "")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+    }
+
     fun checkAnswer() {
         val state = _uiState.value
         if (state is DrillState.Active && !state.isRevealed) {
-            val normalizedInput = state.userInput.trim().lowercase()
+            val normalizedInput = normalizeForComparison(state.userInput)
             val targetAnswer = if (state.config.isUserSpanish) state.card.spanish else state.card.english
-            val normalizedTarget = targetAnswer.trim().lowercase()
+            val normalizedTarget = normalizeForComparison(targetAnswer)
             
-            val isCorrect = normalizedInput == normalizedTarget
+            val alternativeTargets = targetAnswer.split("/", ";").map { normalizeForComparison(it) }
+            
+            val isCorrect = normalizedInput == normalizedTarget || alternativeTargets.any { it.isNotBlank() && it == normalizedInput }
             
             _uiState.value = state.copy(isRevealed = true, isCorrect = isCorrect)
             
             if (isCorrect) {
-                val praise = if (state.config.isUserEnglish) "Correct!" else "¡Correcto!"
-                val praiseLang = if (state.config.isUserEnglish) "en" else "es"
-                audioController.speak(praise, praiseLang)
+                audioController.speak("Correct!", "en")
             } else {
-                val feedback = if (state.config.isUserSpanish) "La respuesta correcta es $targetAnswer" else "The correct answer is $targetAnswer"
-                val feedbackLang = if (state.config.isUserSpanish) "es" else "en"
-                audioController.speak(feedback, feedbackLang)
+                audioController.speak("Incorrect. The correct answer is $targetAnswer", "en")
             }
         }
     }
