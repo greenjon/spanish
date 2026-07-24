@@ -27,6 +27,7 @@ compose.desktop {
             packageVersion = "1.0.0"
             description = "Spanish 1A Practice and Drilling Application"
             vendor = "SpanishApp"
+            modules("java.sql", "java.naming")
         }
     }
 }
